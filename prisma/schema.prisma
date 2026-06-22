@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  owner
+  friend
+}
+
+enum Grade {
+  raw
+  psa9
+  psa10
+}
+
+enum Rarity {
+  C
+  UC
+  R
+  SR
+  SEC
+  SP
+  L
+}
+
+enum Variant {
+  normal
+  altArt
+  mangaArt
+  parallel
+  serial
+}
+
+enum Category {
+  booster
+  starter
+  promo
+  specialCollab
+}
+
+enum PriceSource {
+  ebaySold
+  freeApi
+}
+
+enum SyncStatus {
+  running
+  success
+  failed
+}
+
+model User {
+  id             String           @id @default(cuid())
+  email          String           @unique
+  passwordHash   String
+  displayName    String
+  role           Role             @default(friend)
+  createdAt      DateTime         @default(now())
+  collection     CollectionItem[]
+  watchlist      WatchlistItem[]
+  invitesCreated InviteCode[]     @relation("InviteCreator")
+}
+
+model InviteCode {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  createdById String
+  createdBy   User      @relation("InviteCreator", fields: [createdById], references: [id])
+  note        String?
+  maxUses     Int       @default(1)
+  usesCount   Int       @default(0)
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model Card {
+  id               String            @id @default(cuid())
+  name             String
+  nameJp           String?
+  setCode          String?
+  number           String?
+  rarity           Rarity
+  variant          Variant           @default(normal)
+  category         Category          @default(booster)
+  language         String            @default("ja")
+  imageUrl         String?
+  providerIds      Json?
+  trackOverride    Boolean?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  collectionItems  CollectionItem[]
+  watchlistItems   WatchlistItem[]
+  priceSnapshots   PriceSnapshot[]
+  saleObservations SaleObservation[]
+
+  @@index([setCode])
+  @@index([rarity])
+}
+
+model CollectionItem {
+  id                   String    @id @default(cuid())
+  userId               String
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cardId               String
+  card                 Card      @relation(fields: [cardId], references: [id])
+  grade                Grade
+  quantity             Int       @default(1)
+  purchasePricePerUnit Decimal?  @db.Decimal(12, 2)
+  purchaseCurrency     String?
+  purchaseDate         DateTime?
+  condition            String?
+  notes                String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([userId, cardId, grade])
+}
+
+model PriceSnapshot {
+  id          String      @id @default(cuid())
+  cardId      String
+  card        Card        @relation(fields: [cardId], references: [id])
+  grade       Grade
+  date        DateTime    @db.Date
+  priceNative Decimal     @db.Decimal(12, 2)
+  currency    String
+  priceEur    Decimal     @db.Decimal(12, 2)
+  fxRate      Decimal     @db.Decimal(18, 8)
+  source      PriceSource
+  sampleSize  Int?
+  createdAt   DateTime    @default(now())
+
+  @@unique([cardId, grade, date])
+  @@index([cardId, grade])
+}
+
+model SaleObservation {
+  id          String      @id @default(cuid())
+  cardId      String
+  card        Card        @relation(fields: [cardId], references: [id])
+  grade       Grade
+  saleDate    DateTime    @db.Date
+  priceNative Decimal     @db.Decimal(12, 2)
+  currency    String
+  priceEur    Decimal     @db.Decimal(12, 2)
+  source      PriceSource
+  url         String?
+  createdAt   DateTime    @default(now())
+
+  @@index([cardId, grade])
+}
+
+model WatchlistItem {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cardId      String
+  card        Card     @relation(fields: [cardId], references: [id])
+  grade       Grade?
+  targetPrice Decimal? @db.Decimal(12, 2)
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, cardId])
+}
+
+model FxRate {
+  id       String   @id @default(cuid())
+  date     DateTime @db.Date
+  currency String
+  rate     Decimal  @db.Decimal(18, 8)
+
+  @@unique([date, currency])
+}
+
+model SyncRun {
+  id           String     @id @default(cuid())
+  startedAt    DateTime   @default(now())
+  finishedAt   DateTime?
+  cardsUpdated Int        @default(0)
+  errors       Json?
+  status       SyncStatus @default(running)
+}
