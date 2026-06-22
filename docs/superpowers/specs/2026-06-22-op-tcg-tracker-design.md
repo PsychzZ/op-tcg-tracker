@@ -2,15 +2,16 @@
 
 - **Datum:** 2026-06-22
 - **Status:** Entwurf zur Freigabe
-- **Art:** Persönliche Single-User Web-App (Cloud, immer erreichbar)
+- **Art:** Multi-User Web-App — **privat & invite-only** (Owner + eingeladene Freunde), **nicht-kommerziell**, Cloud, immer erreichbar
 
 ---
 
 ## 1. Ziel & Kontext
 
-Eine persönliche Web-App zum Verwalten der eigenen One-Piece-TCG-Sammlung und zum
-Verfolgen des Marktwerts inkl. Preisentwicklung über die Zeit. Nur der Eigentümer
-nutzt sie (Single-User), Daten liegen dauerhaft in einer Datenbank.
+Eine Web-App zum Verwalten der eigenen One-Piece-TCG-Sammlung und zum Verfolgen des
+Marktwerts inkl. Preisentwicklung. **Mehrere Nutzer** (du als Owner + eingeladene Freunde)
+haben jeweils eine **eigene Sammlung**; **Katalog und Preise sind geteilt** (für alle gleich).
+Zugang nur per **Einladungscode** — die App ist nicht öffentlich und nicht kommerziell.
 
 Schwerpunkt: **seltene/besondere japanische Karten** und deren Wert in den Stufen
 **Raw / PSA 9 / PSA 10**, inkl. **historischer Preis-Charts**.
@@ -20,19 +21,20 @@ Schwerpunkt: **seltene/besondere japanische Karten** und deren Wert in den Stufe
 ## 2. Scope
 
 ### In-Scope
-- Verwaltung der eigenen Sammlung (CRUD) für getrackte Karten
-- Karten-Katalog (nur japanische Spezialkarten) mit Bild, Set, Rarität, Variante
-- Preise je Karte in drei Stufen: **Raw, PSA 9, PSA 10**, Anzeige in **EUR**
+- **Registrierung (per Invite-Code) + Login**, mehrere Nutzer, Rollen (Owner/Freund)
+- **Pro-Nutzer-Sammlung** (jeder sieht nur seinen eigenen Bestand & Sammlungswert)
+- Geteilter Karten-Katalog (nur japanische Spezialkarten) mit Bild, Set, Rarität, Variante
+- Geteilte Preise je Karte in drei Stufen: **Raw, PSA 9, PSA 10**, Anzeige in **EUR**
   (Originalwährung JPY/USD als Referenz)
 - Historische Preis-Charts pro Karte (Raw/PSA 9/PSA 10) + Zeiträume 30T/90T/1J/Max
-- Dashboard: Gesamtwert, Wertentwicklung, Top-Mover, Verteilung
-- Watchlist, Suche/Filter
+- Pro-Nutzer-Dashboard: Gesamtwert, Wertentwicklung, Top-Mover, Verteilung
+- Pro-Nutzer-Watchlist, Suche/Filter
 - Täglicher, automatischer Preis-Aktualisierungs-Job (Cloud-Cron)
 
 ### Out-of-Scope (bewusst nicht)
 - Nicht-japanische Karten (EN o. a.) — werden **nie** importiert/angezeigt
 - Normale C / UC / R (ohne Spezial-Variante)
-- Multi-User, Social-Features, Handel/Marktplatz
+- **Öffentliche** Registrierung, **kommerzielle** Nutzung, Marktplatz/Handel, Social-Feed
 - Mobile-Native-App (Web ist responsive; PWA optional später)
 
 ### Tracking-Regel (`isTrackable`)
@@ -42,9 +44,8 @@ Eine Karte wird getrackt, wenn **Sprache = Japanisch** UND mindestens eins gilt:
 - Kategorie = **Promo** oder **Special-Collab** (z. B. BVB×Luffy)
 
 Ausgeschlossen: normale **C / UC / R**.
-Zusätzlich **manueller Override pro Karte** (`trackOverride`: erzwingt include/exclude),
-damit Sonderfälle immer erfassbar sind. Die Regel ist eine reine Funktion
-`isTrackable(card): boolean` und damit testbar.
+Zusätzlich **manueller Override pro Karte** (`trackOverride`). Reine, testbare Funktion
+`isTrackable(card): boolean`.
 
 ---
 
@@ -55,20 +56,22 @@ damit Sonderfälle immer erfassbar sind. Die Regel ist eine reine Funktion
 - **PostgreSQL** (Neon Free-Tier) via **Prisma** ORM
 - **Recharts** — Charts (3-Serien-Linienchart, Flächen)
 - **Vercel** — Hosting + Deploy; **Vercel Cron** für den täglichen Job
-- **Auth.js (NextAuth)** — Single-User-Login (App bleibt privat, nicht öffentlich)
-- **FX:** EZB-Tageskurse (EUR-Basis), kostenlos
+- **Auth.js (NextAuth) Credentials** — Registrierung (Invite-Code) + Login, gehashte Passwörter,
+  Rollen (Owner/Freund); alle Seiten/API hinter Login
 
-### Austauschbare Schnittstellen (Kern der „später-upgraden"-Strategie)
+### Geteilte vs. Pro-Nutzer-Daten
+- **Geteilt (global):** Card-Katalog, PriceSnapshot, SaleObservation, FxRate
+- **Pro Nutzer:** CollectionItem, WatchlistItem (jeweils `userId`)
+
+### Austauschbare Schnittstellen
 - `CatalogSource` — liefert/aktualisiert Kartendaten. MVP: Import aus Community-Quelle
   (Limitless / apitcg / Datensatz) in einen **lokalen Katalog** (keine Laufzeit-Abhängigkeit).
-- `PriceProvider` — liefert Preise je Karte/Grade. Mehrere Implementierungen:
+- `PriceProvider` — liefert Preise je Karte/Grade. Aktive Implementierungen:
   - `EbaySoldProvider` — echte PSA-9/10-Verkäufe + JP (Primär für Graded-Preise & Historie)
   - `FreeApiProvider` — kostenlose API (TCG Price Lookup / JustTCG) für Abdeckung
-  - `PriceChartingProvider` — nutzt Collector-Token gegen `/api/product` (best-effort/experimentell;
-    wird Primärquelle, falls später Legendary-Abo)
-- `PriceResolver` — wählt pro Karte/Grade die beste verfügbare Quelle (Priorität + Qualität,
-  z. B. eBay-Sold mit ausreichender Sample-Size > Gratis-API > PriceCharting > manuell) und
-  schreibt einen **aufgelösten** Tageswert mit **Quellen-Herkunft** (provenance).
+  - *(`PriceChartingProvider` bewusst NICHT aktiv — siehe §5/ToS)*
+- `PriceResolver` — wählt pro Karte/Grade die beste verfügbare Quelle (Priorität + Qualität)
+  und schreibt einen **aufgelösten** Tageswert mit **Quellen-Herkunft** (provenance).
 
 Designprinzip: kleine, klar abgegrenzte Module mit definierten Interfaces, je einzeln testbar.
 
@@ -76,44 +79,45 @@ Designprinzip: kleine, klar abgegrenzte Module mit definierten Interfaces, je ei
 
 ## 4. Datenmodell (Prisma-Entities)
 
-**Card** (Katalog)
-- `id`, `name`, `nameJp`
-- `setCode?` (nullable — Collab-Promos haben ggf. keine klassische Set-Nr.)
-- `number?`, `rarity` (enum), `variant` (enum: normal/altArt/mangaArt/parallel/serial)
-- `category` (enum: booster/starter/promo/specialCollab)
-- `language` = `"ja"` (fix)
-- `imageUrl?`
-- `providerIds` (JSON: { pricecharting?, freeApi?, ebayQuery? })
-- `trackOverride?` (bool, optional) · abgeleitet: `isTrackable(card)`
+**User**
+- `id`, `email` (unique), `passwordHash`, `displayName`
+- `role` (enum: owner | friend), `createdAt`
+- *Owner = via Env `OWNER_EMAIL` bestimmt; alle anderen = friend.*
+
+**InviteCode**
+- `id`, `code` (unique), `createdByUserId→User`, `note?`
+- `maxUses` (default 1), `usesCount` (default 0), `expiresAt?`, `createdAt`
+- *Registrierung erfordert gültigen, nicht erschöpften, nicht abgelaufenen Code.*
+
+**Card** (geteilter Katalog)
+- `id`, `name`, `nameJp`, `setCode?`, `number?`
+- `rarity` (enum), `variant` (enum: normal/altArt/mangaArt/parallel/serial)
+- `category` (enum: booster/starter/promo/specialCollab), `language` = `"ja"` (fix)
+- `imageUrl?`, `providerIds` (JSON), `trackOverride?` · abgeleitet: `isTrackable(card)`
 - `createdAt`, `updatedAt`
 
-**CollectionItem** (dein Bestand) — Schlüssel (cardId, grade)
-- `id`, `cardId→Card`, `grade` (enum: raw/psa9/psa10)
+**CollectionItem** (Bestand **pro Nutzer**) — eindeutig (userId, cardId, grade)
+- `id`, `userId→User`, `cardId→Card`, `grade` (enum: raw/psa9/psa10)
 - `quantity`, `purchasePricePerUnit?`, `purchaseCurrency?`, `purchaseDate?`
 - `condition?` (für raw), `notes?`
-- *Mehrere Lots pro (Karte,Grade) = spätere Erweiterung; MVP: 1 Zeile, Menge + Ø-Kaufpreis.*
+- *Mehrere Lots pro (Karte,Grade) = spätere Erweiterung.*
 
-**PriceSnapshot** (aufgelöster Tageswert) — eindeutig (cardId, grade, date)
+**PriceSnapshot** (geteilt, aufgelöster Tageswert) — eindeutig (cardId, grade, date)
 - `id`, `cardId`, `grade`, `date`
 - `priceNative`, `currency`, `priceEur`, `fxRate`
-- `source` (enum: ebaySold/freeApi/pricecharting/manual), `sampleSize?`
+- `source` (enum: ebaySold/freeApi), `sampleSize?`
 - *Aus diesen Zeilen entstehen die Charts; idempotent pro Tag.*
 
-**SaleObservation** (echte Verkäufe)
-- `id`, `cardId`, `grade`, `saleDate`
-- `priceNative`, `currency`, `priceEur`, `source`, `url?`
-- *Speist „Letzte Verkäufe" und ermöglicht Historie-Backfill.*
+**SaleObservation** (geteilt, echte Verkäufe)
+- `id`, `cardId`, `grade`, `saleDate`, `priceNative`, `currency`, `priceEur`, `source`, `url?`
 
-**ManualPrice** (optional, ToS-sicheres PriceCharting-Referenzfeld)
-- `id`, `cardId`, `grade`, `priceEur`, `note?`, `updatedAt`
+**WatchlistItem** (**pro Nutzer**)
+- `id`, `userId→User`, `cardId`, `grade?`, `targetPrice?` (Alarme Phase 2), `createdAt`
 
-**WatchlistItem**
-- `id`, `cardId`, `grade?`, `targetPrice?` (für Alarme in Phase 2), `createdAt`
-
-**FxRate** — eindeutig (date, currency)
+**FxRate** (geteilt) — eindeutig (date, currency)
 - `date`, `currency` (gegen EUR), `rate`
 
-**SyncRun** (für „Sync-Status")
+**SyncRun** (für „Sync-Status", Owner-Sicht)
 - `id`, `startedAt`, `finishedAt?`, `cardsUpdated`, `errors?` (JSON), `status`
 
 ---
@@ -121,50 +125,51 @@ Designprinzip: kleine, klar abgegrenzte Module mit definierten Interfaces, je ei
 ## 5. Preise & Historie
 
 ### Multi-Source-Blend
-Der Tages-Job ruft **mehrere Provider** ab und lässt den `PriceResolver` pro
-(Karte, Grade) den besten Wert wählen. Jeder `PriceSnapshot` speichert seine
-**Herkunft** (im UI sichtbar, z. B. „Quelle: eBay-Sold").
+Der Tages-Job ruft die aktiven Provider ab; der `PriceResolver` wählt pro (Karte, Grade)
+den besten Wert und speichert die **Herkunft** (im UI sichtbar, z. B. „Quelle: eBay-Sold").
 
 Priorität (Standard, konfigurierbar):
 1. `EbaySoldProvider` (wenn Sample-Size ausreichend) — echte PSA-Verkäufe
 2. `FreeApiProvider` — Abdeckung
-3. `PriceChartingProvider` (Collector-Token, falls er Daten liefert)
-4. `ManualPrice` (vom Nutzer gepflegt)
 → sonst „keine Daten".
 
 ### Historie
 - **Täglicher Snapshot** pro getrackter Karte/Grade ⇒ durchgehende Tageskurve (wächst ab Tag 1)
 - **SaleObservations** liefern reale Datenpunkte + ermöglichen **Backfill** beim ersten Erfassen
-- Allzeit-Hoch/-Tief & Trend werden aus den Snapshots/Observations berechnet
+- Allzeit-Hoch/-Tief & Trend aus Snapshots/Observations berechnet
 
 ### Währung / FX
-- EZB-Tageskurse (EUR-Basis) täglich laden → `FxRate`
-- Pro Snapshot wird der **verwendete Kurs gespeichert** (historisch konsistente EUR-Werte)
+- EZB-Tageskurse (EUR-Basis) täglich → `FxRate`; **verwendeter Kurs pro Snapshot gespeichert**
 - Anzeige: EUR primär, Originalwährung (JPY/USD) als Referenz
 
-### PriceCharting — ausdrücklicher Vorbehalt (ToS)
-- Collector ($6/Mon.) listet **keinen** API-Zugriff; CSV/„full access" sind **Legendary**-exklusiv.
-- ToS reservieren Preis-Daten-Nutzung **in eigener Software** für **Legendary**.
-- **Entscheidung des Nutzers:** Collector-Token wird **best-effort** getestet; die App bleibt
-  **rein privat & passwortgeschützt (nicht öffentlich)**. Bei Upgrade auf Legendary wird
-  `PriceChartingProvider` zur sanktionierten Primärquelle. Dies ist ein dokumentierter,
-  bewusst akzeptierter Graubereich für reine Privatnutzung.
+### PriceCharting — bewusst NICHT in der App (ToS)
+- Die App ist **Multi-User (Freunde = Dritte)**. PriceChartings ToS untersagen die Nutzung der
+  Preis-Daten **in jeder Software, die Dritten zugänglich ist** — das gilt **auch für Legendary**
+  (ohne Sonder-Erlaubnis).
+- ⇒ Es gibt **keinen** `PriceChartingProvider` im Live-Blend. Der Owner nutzt sein Collector-Abo
+  **privat & manuell** auf pricecharting.com. Das Provider-Interface bleibt erweiterbar, falls je
+  eine ausdrückliche Lizenz/Erlaubnis vorliegt.
+- Ebenso bei `FreeApiProvider`/`EbaySoldProvider`: vor Produktivnutzung deren ToS auf
+  **nicht-kommerzielle Mehr-Nutzer-Verwendung** prüfen (siehe Risiken).
 
 ---
 
 ## 6. Seiten & Features
 
-1. **Dashboard** (`/`) — Gesamtwert (Raw/PSA 9/PSA 10 umschaltbar), Wertentwicklungs-Chart
-   der Sammlung, **Top-Mover** (Gewinner/Verlierer im Zeitraum), Anzahl + Verteilung nach Set/Rarität
-2. **Galerie** (`/cards`) — Thumbnail-Grid; Filter (Set, Rarität, Variante, Kategorie, „nur meine"/alle);
-   Suche (Name DE/JP/Nummer); Sortierung (Wert, 30T-Trend, Name)
-3. **Karten-Detail** (`/cards/[id]`) — Slab-Bild, 3-Linien-Chart (Raw gestrichelt grau · PSA 9 hell ·
-   PSA 10 gold/Fläche) + Zeitraum-Umschalter, „Mein Bestand" (Kaufpreis→Wert→G/V),
-   Allzeit-Hoch/-Tief + Trend, „Letzte Verkäufe" mit Quelle, manuelles PriceCharting-Referenzfeld
-4. **Watchlist** (`/watchlist`) — beobachtete, (noch) nicht besessene Karten
-5. **Sammlung-hinzufügen-Flow** — Katalog-Suche → Karte wählen → Grade/Menge/Kaufpreis;
-   **manuelles Anlegen** für fehlende Karten (inkl. Bild-URL) + `trackOverride`
-6. **Sync-Status** (klein, Header/Settings) — letzter `SyncRun`, Provider-Status
+1. **Login / Registrierung** — Login + Registrierung **mit Invite-Code**; ohne gültigen Code keine Anmeldung
+2. **Dashboard** (`/`, pro Nutzer) — Gesamtwert (Raw/PSA 9/PSA 10 umschaltbar), Wertentwicklungs-Chart,
+   **Top-Mover**, Anzahl + Verteilung nach Set/Rarität
+3. **Galerie** (`/cards`) — geteilter Katalog als Thumbnail-Grid; Filter (Set, Rarität, Variante, Kategorie,
+   „nur meine"/alle); Suche (Name DE/JP/Nummer); Sortierung (Wert, 30T-Trend, Name)
+4. **Karten-Detail** (`/cards/[id]`) — Slab-Bild, 3-Linien-Chart (Raw gestrichelt grau · PSA 9 hell ·
+   PSA 10 gold/Fläche) + Zeitraum, „Mein Bestand" (Kaufpreis→Wert→G/V), Allzeit-Hoch/-Tief + Trend,
+   „Letzte Verkäufe" mit Quelle
+5. **Watchlist** (`/watchlist`, pro Nutzer)
+6. **Sammlung-hinzufügen-Flow** — Katalog-Suche → Karte wählen → Grade/Menge/Kaufpreis;
+   **manuelles Anlegen** fehlender Karten (inkl. Bild-URL) + `trackOverride`
+7. **Einstellungen**
+   - **Owner:** Invite-Codes generieren/verwalten, **Sync-Status** (`SyncRun`), Katalog-Sync anstoßen
+   - **Alle:** Profil (Anzeigename, Passwort ändern)
 
 ---
 
@@ -182,71 +187,76 @@ die UI bleibt ruhig. Design-Tokens:
 - Zahlen: `tabular-nums`, rechtsbündig in Tabellen; Raritäts-Chips monochrom (nur Rahmen)
 
 *(Interaktive Mockups liegen unter `.superpowers/brainstorm/…`, sind aber gitignored —
-daher sind die verbindlichen Tokens hier im Spec festgehalten.)*
+daher sind die verbindlichen Tokens hier festgehalten.)*
 
 ---
 
-## 8. Auth & Jobs
+## 8. Auth, Rollen & Jobs
 
-### Auth (Single-User)
-- Auth.js (NextAuth) Credentials; ein einziges Konto via Env-Konfiguration.
-- Alle Seiten + API hinter Login (auch nötig für ToS-Posture „nicht öffentlich").
+### Auth & Rollen
+- **Auth.js (NextAuth) Credentials**; Passwörter gehasht (bcrypt/argon2).
+- **Registrierung nur mit gültigem `InviteCode`**; nach Verbrauch `usesCount++`.
+- **Rollen:** `owner` (du, via `OWNER_EMAIL` geseedet) darf Invite-Codes/Katalog/Sync verwalten;
+  `friend` verwaltet nur eigene Sammlung/Watchlist.
+- **Daten-Isolation:** jede Abfrage auf CollectionItem/WatchlistItem ist auf `session.userId` gescoped.
+- Alle Seiten + API hinter Login (kein öffentlicher Zugriff).
 
 ### Cron — `/api/cron/daily` (geschützt per Secret-Header / Vercel Cron)
 1. FX laden (EZB) → `FxRate` upsert
 2. Für jede trackbare Karte, je Grade [raw, psa9, psa10]:
-   Provider abrufen → `PriceResolver` → `PriceSnapshot` (idempotent/Tag) schreiben;
-   `SaleObservation`s anhängen
+   aktive Provider abrufen → `PriceResolver` → `PriceSnapshot` (idempotent/Tag); `SaleObservation`s anhängen
 3. Rate-Limits beachten (Gratis-API ~200/Tag → ggf. über mehrere Tage verteilen/priorisieren)
 4. `SyncRun` protokollieren
 - **Idempotent:** erneuter Lauf am selben Tag aktualisiert dieselben Zeilen.
-- **Catch-up:** fehlt ein Tag, wird er beim nächsten Lauf nicht rückwirkend erfunden
-  (Snapshots = Ist-Stand); Lücken sind im Chart tolerierbar.
 
 ---
 
 ## 9. MVP-Phasen
 
 **Phase 1 (MVP)**
+- **Auth: Registrierung (Invite-Code) + Login + Rollen** (Owner/Freund), Daten-Isolation pro Nutzer
 - Katalog-Import (JP-Spezialkarten) + `isTrackable` + `trackOverride`
-- Collection-CRUD + „Mein Bestand" / G-V
-- `PriceResolver` + `EbaySoldProvider` + `FreeApiProvider` + `PriceChartingProvider` (Collector-Test) + `ManualPrice`
-  (eBay-Sold ist Ziel im MVP — siehe Risiko-Hinweis unten, kann nach Phase 2 rutschen)
+- Collection-CRUD (pro Nutzer) + „Mein Bestand" / G-V
+- `PriceResolver` + `EbaySoldProvider` + `FreeApiProvider`
+  (eBay-Sold ist Ziel im MVP — siehe Risiko-Hinweis, kann nach Phase 2 rutschen)
 - Täglicher Snapshot-Job + FX; Charts wachsen ab Tag 1
-- Seiten: Dashboard, Galerie, Detail, Watchlist, Hinzufügen, Sync-Status
-- Auth + Cloud-Deploy (Vercel + Neon)
+- Seiten: Login/Register, Dashboard, Galerie, Detail, Watchlist, Hinzufügen, Einstellungen (Invite/Sync)
+- Cloud-Deploy (Vercel + Neon)
 
 **Phase 2**
 - eBay-Sold ausbauen: Historie-Backfill + größere Abdeckung/Robustheit
-- Bessere JP-Abdeckung / optional PriceCharting-Legendary als Primärquelle
+- Bessere JP-Abdeckung
 - **Preis-Alarme** (Watchlist-Zielpreis), CSV-Import/Export
 
 **Phase 3 (optional)**
 - Bild-Erkennung zum Hinzufügen · PWA-Feinschliff · Mehrere Lots pro Karte/Grade
 
 > Hinweis: `EbaySoldProvider` ist die wertvollste, aber zugriffstechnisch kniffligste Quelle
-> (eBay-Sold-API ist eingeschränkt → Aggregator/Apify, evtl. kleine Kosten). Ziel ist MVP,
-> kann aber nach Phase 2 rutschen, falls der Zugang aufwändig wird. Architektur ist vorbereitet.
+> (eBay-Sold-API eingeschränkt → Aggregator/Apify, evtl. kleine Kosten). Architektur ist vorbereitet.
 
 ---
 
 ## 10. Tests (TDD bei der Umsetzung)
 
 - **Unit:** `isTrackable()`; FX-Umrechnung; Provider-Mapping & Grade-Parsing;
-  `PriceResolver`-Auswahl-Logik; Snapshot-Idempotenz (1×/Tag)
-- **Integration:** geschützte Cron-Route (Auth + Idempotenz); DB-Schreibpfade
-- **Komponenten:** 3-Serien-Chart rendert korrekt; Galerie-Filter/Suche
+  `PriceResolver`-Auswahl-Logik; Snapshot-Idempotenz; Invite-Code-Validierung
+- **Integration:** geschützte Cron-Route; Auth/Registrierungs-Flow; **Daten-Isolation pro Nutzer**
+  (Nutzer A sieht nie Bestand von Nutzer B); Rollen-Guards (nur Owner: Invite/Sync)
+- **Komponenten:** 3-Serien-Chart; Galerie-Filter/Suche
 
 ---
 
 ## 11. Risiken & offene Punkte
 
+- **Provider-ToS bei Multi-User/Non-Profit:** `FreeApiProvider`/`EbaySoldProvider` vor Produktiv-
+  nutzung auf nicht-kommerzielle Mehr-Nutzer-Verwendung prüfen; PriceCharting ist bereits ausgeschlossen
 - **eBay-Sold-Zugang:** offizielle API eingeschränkt → Aggregator/Apify/Scraper (evtl. kleine Kosten, fragiler)
-- **PriceCharting Collector/ToS:** Graubereich; App bleibt privat/auth-gated; ggf. Legendary-Upgrade
 - **Gratis-API JP-Abdeckung:** einzelne JP-Spezialkarten ohne Preis → „keine Daten" (verbessert sich Phase 2)
+- **Sicherheit/Datenschutz:** fremde Nutzerdaten (Freunde) → Passwort-Hashing, Session-Schutz,
+  strikte Daten-Isolation; nur minimale personenbezogene Daten (E-Mail, Anzeigename)
 - **Historie startet ~jetzt:** Backfill nur best-effort über SaleObservations
 - **Rate-Limits:** große Sammlungen brauchen Priorisierung/Verteilung des Tages-Jobs
-- **Katalog-Datenquelle/Lizenz:** Daten der Community-Quellen ggf. nur eingeschränkt nutzbar → Quelle bei Umsetzung final wählen
+- **Katalog-Datenquelle/Lizenz:** Daten der Community-Quellen ggf. eingeschränkt nutzbar → Quelle bei Umsetzung final wählen
 
 ---
 
@@ -254,12 +264,15 @@ daher sind die verbindlichen Tokens hier im Spec festgehalten.)*
 
 | Thema | Entscheidung | Grund |
 |------|--------------|-------|
-| Preis-Quelle | Multi-Source-Blend (eBay-Sold + Gratis-API + PriceCharting-Collector-Test + manuell), pluggable | Beste Abdeckung; sofort baubar; Upgrade-Pfad |
+| Nutzer-Modell | **Multi-User, invite-only** (Owner + Freunde), nicht-kommerziell | Wunsch: Freunde sollen mitnutzen, aber privat |
+| Registrierung | **Invite-Code** | Hält es auf Freunde beschränkt, kein Pro-Person-Aufwand |
+| Daten-Scope | Katalog/Preise geteilt; Sammlung/Watchlist pro Nutzer | Preise sind global gleich; Bestand ist privat |
+| PriceCharting | **Nicht in der App** (ToS verbietet Dritt-zugängliche Nutzung) | Multi-User = Dritte; Owner nutzt PC privat manuell |
+| Preis-Quelle | Multi-Source-Blend (eBay-Sold + Gratis-API), pluggable | Beste Abdeckung; sofort baubar |
 | Historie | Eigene Tages-Snapshots + SaleObservations | Unabhängig von Anbieter-Historie; wächst ab Tag 1 |
 | Hosting | Cloud, immer erreichbar (Vercel + Neon + Cron) | „Über alle Geräte"; autonomer Tages-Job |
 | Stack | Next.js + TS + Tailwind + Prisma + Recharts | Bewährt, full-stack, gut für Charts |
 | Optik | „Vault" — neutrales Anthrazit-Grau + Gold, clean | Nutzer-Feedback (leserlich, wenig Farbe) |
-| Karten-Bilder | Galerie mit Thumbnails; Farbe kommt von Karten | Nutzer-Wunsch |
 | Special/Promo | Eigene Kategorie (z. B. BVB×Luffy), Set-Nr. optional | Collab-Promos ohne klassische Set-Nr. |
 | Katalog | Lokaler Katalog aus Community-Quelle | Keine Laufzeit-Abhängigkeit |
 | Währung | EUR-Anzeige via EZB; Original als Referenz | Nutzer-Wunsch |
