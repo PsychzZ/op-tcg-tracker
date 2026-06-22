@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Superpowers brainstorming companion (local mockups)
 .superpowers/
+
+# IDE
+.idea/
