@@ -33,7 +33,7 @@ export default async function CardDetailPage({
             <span className="border border-white/20 rounded px-1.5">{card.rarity}</span> ·{" "}
             {card.variant} · 🇯🇵 Japanisch
           </p>
-          <p className="text-[#82858c] text-sm mt-6">Preis-Charts &amp; „Mein Bestand" folgen (Pläne 4–5).</p>
+          <p className="text-[#82858c] text-sm mt-6">Preis-Charts &amp; „Mein Bestand&ldquo; folgen (Pläne 4–5).</p>
         </div>
       </div>
     </main>
