@@ -13,7 +13,8 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "seed:owner": "tsx scripts/seed-owner.ts",
-    "import:catalog": "tsx scripts/import-catalog.ts"
+    "import:catalog": "tsx scripts/import-catalog.ts",
+    "job:daily": "tsx scripts/run-daily.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
