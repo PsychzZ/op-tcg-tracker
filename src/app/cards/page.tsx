@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/session";
 import { db } from "@/lib/db";
+import { AppShell } from "@/components/AppShell";
 import { CardThumb } from "@/components/CardThumb";
 import type { Prisma, Rarity } from "@prisma/client";
 
@@ -27,7 +28,7 @@ export default async function CardsPage({
   const cards = await db.card.findMany({ where, orderBy: { name: "asc" }, take: 200 });
 
   return (
-    <main className="min-h-screen bg-[#1e1f22] text-[#f3f4f5] p-8">
+    <AppShell>
       <h1 className="text-lg font-semibold mb-4">Karten</h1>
       <form className="flex flex-wrap gap-2 mb-6">
         <input
@@ -54,6 +55,6 @@ export default async function CardsPage({
           ))}
         </div>
       )}
-    </main>
+    </AppShell>
   );
 }
