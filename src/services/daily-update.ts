@@ -53,48 +53,57 @@ export async function runDailyUpdate() {
       for (const grade of GRADES) {
         const chosen = resolvePrice(perGrade.get(grade) ?? []);
         if (!chosen) continue;
-        const priceEur = convertToEur(chosen.priceNative, chosen.currency, rates);
-        const fxRate = chosen.currency === "EUR" ? 1 : rates[chosen.currency];
+        // Isolate each grade: a bad/unknown currency must not abort the whole run.
+        try {
+          const fxRate = chosen.currency === "EUR" ? 1 : rates[chosen.currency];
+          if (!fxRate) {
+            errors.push(`fx:${card.externalId}:${grade}:no rate for ${chosen.currency}`);
+            continue;
+          }
+          const priceEur = convertToEur(chosen.priceNative, chosen.currency, rates);
 
-        await db.priceSnapshot.upsert({
-          where: { cardId_grade_date: { cardId: card.id, grade, date } },
-          update: {
-            priceNative: chosen.priceNative,
-            currency: chosen.currency,
-            priceEur,
-            fxRate,
-            source: chosen.source,
-            sampleSize: chosen.sampleSize ?? null,
-          },
-          create: {
-            cardId: card.id,
-            grade,
-            date,
-            priceNative: chosen.priceNative,
-            currency: chosen.currency,
-            priceEur,
-            fxRate,
-            source: chosen.source,
-            sampleSize: chosen.sampleSize ?? null,
-          },
-        });
-
-        if (chosen.observations?.length) {
-          await db.saleObservation.createMany({
-            data: chosen.observations.map((o) => ({
+          await db.priceSnapshot.upsert({
+            where: { cardId_grade_date: { cardId: card.id, grade, date } },
+            update: {
+              priceNative: chosen.priceNative,
+              currency: chosen.currency,
+              priceEur,
+              fxRate,
+              source: chosen.source,
+              sampleSize: chosen.sampleSize ?? null,
+            },
+            create: {
               cardId: card.id,
               grade,
-              saleDate: o.saleDate,
-              priceNative: o.priceNative,
-              currency: o.currency,
-              priceEur: convertToEur(o.priceNative, o.currency, rates),
+              date,
+              priceNative: chosen.priceNative,
+              currency: chosen.currency,
+              priceEur,
+              fxRate,
               source: chosen.source,
-              url: o.url,
-            })),
-            skipDuplicates: true,
+              sampleSize: chosen.sampleSize ?? null,
+            },
           });
+
+          if (chosen.observations?.length) {
+            await db.saleObservation.createMany({
+              data: chosen.observations.map((o) => ({
+                cardId: card.id,
+                grade,
+                saleDate: o.saleDate,
+                priceNative: o.priceNative,
+                currency: o.currency,
+                priceEur: convertToEur(o.priceNative, o.currency, rates),
+                source: chosen.source,
+                url: o.url,
+              })),
+              skipDuplicates: true,
+            });
+          }
+          cardsUpdated++;
+        } catch (e) {
+          errors.push(`snapshot:${card.externalId}:${grade}:${String(e)}`);
         }
-        cardsUpdated++;
       }
     }
 
