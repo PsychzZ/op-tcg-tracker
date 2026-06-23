@@ -12,7 +12,8 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
-    "seed:owner": "tsx scripts/seed-owner.ts"
+    "seed:owner": "tsx scripts/seed-owner.ts",
+    "import:catalog": "tsx scripts/import-catalog.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

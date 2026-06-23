@@ -1,0 +1,9 @@
+[
+  { "externalId": "OP01-120", "name": "Monkey D. Luffy", "nameJp": "モンキー・D・ルフィ", "rarity": "SEC", "language": "ja", "setCode": "OP-01", "number": "120" },
+  { "externalId": "OP05-119", "name": "Monkey D. Luffy", "nameJp": "モンキー・D・ルフィ", "rarity": "SEC", "language": "ja", "setCode": "OP-05", "number": "119", "flags": { "altArt": true } },
+  { "externalId": "OP09-093", "name": "Monkey D. Luffy", "nameJp": "モンキー・D・ルフィ", "rarity": "SR", "language": "ja", "setCode": "OP-09", "number": "093", "flags": { "mangaArt": true } },
+  { "externalId": "P-BVB-001", "name": "Monkey D. Luffy x BVB", "nameJp": "ルフィ×BVB", "rarity": "SP", "language": "ja", "number": "P-BVB-001", "flags": { "collab": true } },
+  { "externalId": "OP02-013", "name": "Trafalgar Law", "nameJp": "トラファルガー・ロー", "rarity": "L", "language": "ja", "setCode": "OP-02", "number": "013" },
+  { "externalId": "OP01-016", "name": "Jinbe", "rarity": "C", "language": "ja", "setCode": "OP-01", "number": "016" },
+  { "externalId": "EN-OP01-120", "name": "Monkey D. Luffy", "rarity": "SEC", "language": "en", "setCode": "OP-01", "number": "120" }
+]
