@@ -80,6 +80,7 @@ model InviteCode {
 
 model Card {
   id               String            @id @default(cuid())
+  externalId       String?           @unique
   name             String
   nameJp           String?
   setCode          String?
