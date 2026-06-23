@@ -153,6 +153,7 @@ model SaleObservation {
   url         String?
   createdAt   DateTime    @default(now())
 
+  @@unique([cardId, grade, saleDate, priceNative, source])
   @@index([cardId, grade])
 }
 
