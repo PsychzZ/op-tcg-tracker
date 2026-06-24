@@ -5,10 +5,11 @@ import { resolvePrice } from "@/domain/price-resolver";
 import { fetchEcbRates } from "@/lib/providers/ecb-fx";
 import { freeApiProvider } from "@/lib/providers/free-api";
 import { ebaySoldProvider } from "@/lib/providers/ebay-sold";
+import { tcgGoProvider } from "@/lib/providers/tcggo";
 import type { ProviderPrice } from "@/lib/providers/types";
 
 const GRADES: Grade[] = ["raw", "psa9", "psa10"];
-const PROVIDERS = [ebaySoldProvider, freeApiProvider];
+const PROVIDERS = [tcgGoProvider, ebaySoldProvider, freeApiProvider];
 
 function utcMidnight(): Date {
   return new Date(new Date().toISOString().slice(0, 10));
