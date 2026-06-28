@@ -6,6 +6,7 @@ import { toggleWatchAction } from "@/app/actions/watchlist";
 import { CardImage } from "./CardImage";
 import { PriceTag } from "./ui/PriceTag";
 import { RarityBadge } from "./ui/Badge";
+import { StarIcon, StarFilledIcon } from "./ui/icons";
 
 export function CardThumb({
   card,
@@ -26,14 +27,14 @@ export function CardThumb({
         <button
           title={watched ? "Von Watchlist entfernen" : "Zur Watchlist"}
           aria-label={watched ? "Von Watchlist entfernen" : "Zur Watchlist"}
-          className={`h-7 w-7 rounded-md grid place-items-center text-sm leading-none transition
+          className={`h-7 w-7 rounded-md grid place-items-center transition
             ${
               watched
                 ? "bg-gold text-vault"
                 : "bg-black/55 text-ink opacity-0 group-hover:opacity-100 hover:bg-black/75 backdrop-blur-sm"
             }`}
         >
-          ★
+          {watched ? <StarFilledIcon className="h-3.5 w-3.5" /> : <StarIcon className="h-3.5 w-3.5" />}
         </button>
       </form>
 

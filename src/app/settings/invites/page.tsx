@@ -2,6 +2,7 @@ import { requireOwner } from "@/lib/session";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/AppShell";
 import { Panel } from "@/components/ui/Panel";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Input } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { createInviteAction } from "@/app/actions/invites";
@@ -12,8 +13,7 @@ export default async function InvitesPage() {
 
   return (
     <AppShell>
-      <h1 className="text-2xl font-bold tracking-tight mb-1">Invite-Codes</h1>
-      <p className="text-sm text-muted mb-6">Erstelle Codes, mit denen Freunde sich registrieren können.</p>
+      <PageHeader title="Invite-Codes" subtitle="Erstelle Codes, mit denen Freunde sich registrieren können." />
 
       <form action={createInviteAction} className="flex gap-2 mb-6 max-w-md">
         <Input name="note" placeholder="Notiz (z. B. 'für Tim')" />

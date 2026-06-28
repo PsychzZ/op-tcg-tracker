@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { CardThumb } from "@/components/CardThumb";
 import { Input, Select } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { ChevronLeftIcon } from "@/components/ui/icons";
 import { getLatestRawPrices } from "@/services/prices";
 import { resizePcImage } from "@/domain/pricecharting-image";
 import { sectionFor } from "@/domain/card-set";
@@ -202,8 +203,8 @@ export default async function CardsPage({
   return (
     <AppShell>
       <div className="flex items-end justify-between flex-wrap gap-3 mb-1">
-        <Link href="/cards" className="text-xs text-dim hover:text-ink transition-colors">
-          ← Sets
+        <Link href="/cards" className="inline-flex items-center gap-1 text-xs text-dim hover:text-ink transition-colors">
+          <ChevronLeftIcon className="h-3.5 w-3.5" /> Sets
         </Link>
         <span className="text-xs text-dim tabular-nums">
           {sorted.length} Karten{truncated ? ` · zeige ${LIMIT}` : ""}
@@ -211,21 +212,33 @@ export default async function CardsPage({
       </div>
       <h1 className="text-2xl font-bold tracking-tight mb-4">{title}</h1>
 
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        <Link
+          href={keep({ rarity: "" })}
+          className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+            !sp.rarity ? "border-gold/50 text-gold" : "border-line text-dim hover:text-ink"
+          }`}
+        >
+          Alle
+        </Link>
+        {RARITIES.map((r) => (
+          <Link
+            key={r}
+            href={keep({ rarity: r })}
+            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+              sp.rarity === r ? "border-gold/50 text-gold" : "border-line text-dim hover:text-ink"
+            }`}
+          >
+            {r}
+          </Link>
+        ))}
+      </div>
+
       <form className="flex flex-wrap items-end gap-2 mb-6">
         {sp.set ? <input type="hidden" name="set" value={sp.set} /> : null}
         {sp.cat ? <input type="hidden" name="cat" value={sp.cat} /> : null}
         <div className="flex-1 min-w-[180px]">
           <Input name="q" defaultValue={sp.q ?? ""} placeholder="Suche (Name / JP / Nr.)" />
-        </div>
-        <div className="w-36">
-          <Select name="rarity" defaultValue={sp.rarity ?? ""}>
-            <option value="">Alle Raritäten</option>
-            {RARITIES.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </Select>
         </div>
         <div className="w-36">
           <Select name="sort" defaultValue={sp.sort ?? "name"}>
