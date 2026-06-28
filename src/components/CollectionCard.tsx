@@ -13,11 +13,13 @@ export function CollectionCard({
   grade,
   quantity,
   valueEur,
+  deltaPct,
 }: {
   card: Card;
   grade: Grade;
   quantity: number;
   valueEur: number;
+  deltaPct?: number | null;
 }) {
   const img = resizePcImage(card.imageUrl, 320) ?? cardImageUrl(card.number);
 
@@ -46,7 +48,14 @@ export function CollectionCard({
         <div className="text-[12.5px] font-semibold truncate">{card.name}</div>
         <div className="flex items-center justify-between gap-2 mt-1.5">
           <span className="text-[10.5px] text-dim truncate">{card.setCode ?? "Promo"}</span>
-          <PriceTag value={valueEur} className="text-[11.5px] whitespace-nowrap" />
+          <div className="text-right">
+            <PriceTag value={valueEur} className="text-[11.5px] whitespace-nowrap" />
+            {deltaPct != null && (
+              <div className={`text-[10px] tabular-nums ${deltaPct >= 0 ? "text-up" : "text-down"}`}>
+                {deltaPct >= 0 ? "▲" : "▼"} {Math.abs(deltaPct)}%
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </Link>

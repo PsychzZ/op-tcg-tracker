@@ -53,6 +53,16 @@ async function portfolioHistory(
   });
 }
 
+async function holdingDeltaPct(cardId: string, grade: Grade, sinceDays = 30): Promise<number | null> {
+  const since = new Date(Date.now() - sinceDays * 86400_000);
+  const [recent, old] = await Promise.all([
+    db.priceSnapshot.findFirst({ where: { cardId, grade }, orderBy: { date: "desc" } }),
+    db.priceSnapshot.findFirst({ where: { cardId, grade, date: { lte: since } }, orderBy: { date: "desc" } }),
+  ]);
+  if (recent && old) return pctChange(Number(old.priceEur), Number(recent.priceEur));
+  return null;
+}
+
 export async function getDashboard(userId: string, rangeDays = 90) {
   const items = await db.collectionItem.findMany({ where: { userId }, include: { card: true } });
 
@@ -98,18 +108,21 @@ export async function getDashboard(userId: string, rangeDays = 90) {
     distribution[item.card.rarity] = (distribution[item.card.rarity] ?? 0) + item.quantity;
   }
 
-  const holdings = items
-    .map((item) => {
-      const price = priceMaps.get(item.cardId)?.[item.grade] ?? 0;
-      return {
-        id: item.id,
-        card: item.card,
-        grade: item.grade,
-        quantity: item.quantity,
-        valueEur: price * item.quantity,
-      };
-    })
-    .sort((a, b) => b.valueEur - a.valueEur);
+  const holdings = (
+    await Promise.all(
+      items.map(async (item) => {
+        const price = priceMaps.get(item.cardId)?.[item.grade] ?? 0;
+        return {
+          id: item.id,
+          card: item.card,
+          grade: item.grade,
+          quantity: item.quantity,
+          valueEur: price * item.quantity,
+          deltaPct: await holdingDeltaPct(item.cardId, item.grade),
+        };
+      }),
+    )
+  ).sort((a, b) => b.valueEur - a.valueEur);
 
   return {
     totals,

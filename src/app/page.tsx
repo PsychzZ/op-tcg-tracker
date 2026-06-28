@@ -130,7 +130,7 @@ export default async function DashboardPage({
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {holdings.map((h) => (
-            <CollectionCard key={h.id} card={h.card} grade={h.grade} quantity={h.quantity} valueEur={h.valueEur} />
+            <CollectionCard key={h.id} card={h.card} grade={h.grade} quantity={h.quantity} valueEur={h.valueEur} deltaPct={h.deltaPct} />
           ))}
         </div>
       )}
