@@ -3,13 +3,14 @@ import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { db } from "@/lib/db";
 import { AppShell } from "@/components/AppShell";
-import { PriceChart } from "@/components/PriceChart";
+import { PriceHistory } from "@/components/PriceHistory";
 import { CardImage } from "@/components/CardImage";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Button } from "@/components/ui/Button";
-import { RarityBadge } from "@/components/ui/Badge";
+import { Badge, RarityBadge } from "@/components/ui/Badge";
 import { Input, Select, Label } from "@/components/ui/Field";
 import { getLatestPriceMap, getPriceHistory } from "@/services/prices";
+import { gradeDeltas } from "@/domain/movers";
 import { holdingPnl } from "@/domain/valuation";
 import { buildPriceSeries } from "@/domain/chart";
 import { cardImageUrl } from "@/domain/card-image";
@@ -22,6 +23,12 @@ import type { Grade } from "@/domain/card";
 const GRADES: Grade[] = ["raw", "psa9", "psa10"];
 const GRADE_LABEL: Record<Grade, string> = { raw: "Raw", psa9: "PSA 9", psa10: "PSA 10" };
 const GRADE_VALUE_CLS: Record<Grade, string> = { raw: "text-muted", psa9: "text-ink", psa10: "text-gold" };
+const VARIANT_LABEL: Record<string, string> = {
+  altArt: "Alt Art",
+  mangaArt: "Manga",
+  parallel: "Parallel",
+  serial: "Serial",
+};
 
 export default async function CardDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
@@ -30,12 +37,14 @@ export default async function CardDetailPage({ params }: { params: Promise<{ id:
   const card = await db.card.findUnique({ where: { id } });
   if (!card) notFound();
 
-  const [prices, history, holdings] = await Promise.all([
+  const [prices, history, holdings, watched] = await Promise.all([
     getLatestPriceMap(card.id),
     getPriceHistory(card.id),
     db.collectionItem.findMany({ where: { userId: user.id, cardId: card.id } }),
+    db.watchlistItem.findFirst({ where: { userId: user.id, cardId: card.id } }),
   ]);
   const series = buildPriceSeries(history);
+  const deltas = gradeDeltas(history, 30);
 
   return (
     <AppShell>
@@ -43,7 +52,7 @@ export default async function CardDetailPage({ params }: { params: Promise<{ id:
 
       <div className="mt-4 grid lg:grid-cols-[300px_1fr] gap-8">
         {/* LEFT: image + holdings */}
-        <div className="space-y-4">
+        <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
           <Panel className="overflow-hidden">
             <div className="aspect-[5/7] bg-raised">
               <CardImage
@@ -99,19 +108,21 @@ export default async function CardDetailPage({ params }: { params: Promise<{ id:
             <div>
               <h1 className="text-2xl font-bold tracking-tight">{card.name}</h1>
               {card.nameJp && <p className="text-muted mt-1">{card.nameJp}</p>}
-              <div className="flex items-center gap-2 text-sm text-muted mt-2.5">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted mt-2.5">
                 <span>
                   {card.setCode ?? "Promo"}
                   {card.number ? ` · ${card.number}` : ""}
                 </span>
                 <RarityBadge rarity={card.rarity} />
-                <span className="text-dim">·</span>
-                <span>🇯🇵 Japanisch</span>
+                {VARIANT_LABEL[card.variant] && <Badge className="border-line-strong text-muted">{VARIANT_LABEL[card.variant]}</Badge>}
+                <Badge className="border-line-strong text-dim">JP</Badge>
               </div>
             </div>
             <form action={toggleWatchAction}>
               <input type="hidden" name="cardId" value={card.id} />
-              <Button variant="outline" size="sm" className="whitespace-nowrap">★ Watchlist</Button>
+              <Button variant={watched ? "primary" : "outline"} size="sm" className="whitespace-nowrap">
+                {watched ? "★ Beobachtet" : "☆ Watchlist"}
+              </Button>
             </form>
           </div>
 
@@ -125,6 +136,11 @@ export default async function CardDetailPage({ params }: { params: Promise<{ id:
                 <div className={cn("text-xl font-bold tabular-nums mt-1.5", GRADE_VALUE_CLS[g])}>
                   {prices[g] ? formatEur(prices[g]) : "—"}
                 </div>
+                {deltas[g] !== null && (
+                  <div className={cn("text-[11px] tabular-nums mt-0.5", deltas[g]! >= 0 ? "text-up" : "text-down")}>
+                    {deltas[g]! >= 0 ? "▲" : "▼"} {Math.abs(deltas[g]!)}% · 30T
+                  </div>
+                )}
               </Panel>
             ))}
           </div>
@@ -132,7 +148,7 @@ export default async function CardDetailPage({ params }: { params: Promise<{ id:
           <Panel className="p-4">
             <PanelHeader title="Preisverlauf" />
             <div className="mt-3">
-              <PriceChart data={series} />
+              <PriceHistory data={series} />
             </div>
           </Panel>
 
