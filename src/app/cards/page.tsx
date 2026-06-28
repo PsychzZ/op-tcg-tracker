@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { CardThumb } from "@/components/CardThumb";
 import { Input, Select } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { ChevronLeftIcon } from "@/components/ui/icons";
 import { getLatestRawPrices } from "@/services/prices";
 import { resizePcImage } from "@/domain/pricecharting-image";
 import { sectionFor } from "@/domain/card-set";
@@ -202,8 +203,8 @@ export default async function CardsPage({
   return (
     <AppShell>
       <div className="flex items-end justify-between flex-wrap gap-3 mb-1">
-        <Link href="/cards" className="text-xs text-dim hover:text-ink transition-colors">
-          ← Sets
+        <Link href="/cards" className="inline-flex items-center gap-1 text-xs text-dim hover:text-ink transition-colors">
+          <ChevronLeftIcon className="h-3.5 w-3.5" /> Sets
         </Link>
         <span className="text-xs text-dim tabular-nums">
           {sorted.length} Karten{truncated ? ` · zeige ${LIMIT}` : ""}
