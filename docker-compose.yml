@@ -1,4 +1,5 @@
-# Local Postgres for self-hosting (e.g. Raspberry Pi). See docs/self-hosting-pi.md.
+# Full self-hosting stack (e.g. Raspberry Pi). `docker compose up -d` runs DB + app + scheduler.
+# One-off data tasks (seed/import) use the profile-gated `tools` service. See docs/self-hosting-pi.md.
 services:
   db:
     image: postgres:16-alpine
@@ -8,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opvault}
       POSTGRES_DB: ${POSTGRES_DB:-opvault}
     ports:
-      - "5432:5432"
+      - "5432:5432" # exposed so host tools (pg_restore, prisma studio) can reach it
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -16,6 +17,66 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Applies Prisma migrations once, then exits. Runs in the full build image (has the Prisma CLI).
+  migrate:
+    build:
+      context: .
+      target: build
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-opvault}:${POSTGRES_PASSWORD:-opvault}@db:5432/${POSTGRES_DB:-opvault}?schema=public
+    command: ["npx", "prisma", "migrate", "deploy"]
+    restart: "no"
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      # Inside the compose network the database host is "db" (not localhost). This overrides
+      # whatever DATABASE_URL is in .env, so the same .env works for host runs and the container.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-opvault}:${POSTGRES_PASSWORD:-opvault}@db:5432/${POSTGRES_DB:-opvault}?schema=public
+    ports:
+      - "3000:3000"
+
+  # Triggers the price sync every 3 days by calling the app's cron endpoint from inside the network.
+  cron:
+    image: curlimages/curl:latest
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+    env_file: .env
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          curl -fsS -H "Authorization: Bearer $$CRON_SECRET" http://app:3000/api/cron/daily && sleep 259200 || sleep 300;
+        done
+
+  # One-off data tasks: `docker compose run --rm tools npm run seed:owner`
+  #                     `docker compose run --rm tools npm run import:pc:full -- --min=11`
+  # Uses the build stage (full deps + tsx + scripts). Not started by `docker compose up`.
+  tools:
+    build:
+      context: .
+      target: build
+    profiles: ["tools"]
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-opvault}:${POSTGRES_PASSWORD:-opvault}@db:5432/${POSTGRES_DB:-opvault}?schema=public
 
 volumes:
   pgdata:

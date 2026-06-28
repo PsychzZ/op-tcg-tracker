@@ -1,93 +1,88 @@
-# Self-Hosting on a Raspberry Pi 4
+# Self-Hosting on a Raspberry Pi 4 (Docker)
 
-Run OP Vault entirely on a Pi: local Postgres (Docker), the Next app, and the price job via cron.
-Switching between Neon (cloud) and the Pi is just a `DATABASE_URL` change — schema and code are identical.
+The whole stack runs in Docker: **`docker compose up -d`** starts Postgres, applies migrations, serves
+the app, and schedules the price sync. No Node/npm needed on the host.
 
 ## 1. Prerequisites
 
-- Raspberry Pi OS (64-bit), Node 20+, and Docker:
-  ```bash
-  curl -fsSL https://get.docker.com | sh
-  sudo usermod -aG docker $USER   # re-login afterwards
-  ```
-
-## 2. Start the database
-
+Raspberry Pi OS (64-bit) + Docker:
 ```bash
-cd op-tcg-tracker
-docker compose up -d db
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER   # then re-login
 ```
 
-Set these in `.env`:
+## 2. Configure `.env`
 
+Copy `.env.example` to `.env` and set at least:
 ```bash
-DATABASE_URL="postgresql://opvault:opvault@localhost:5432/opvault?schema=public"
+AUTH_SECRET=...            # npx auth secret
+OWNER_EMAIL=you@example.com
+OWNER_PASSWORD=...         # your login password
+PRICECHARTING_TOKEN=...    # for catalog import + price sync
+CRON_SECRET=...            # used by the scheduler to call the cron endpoint
+# Optional — DB credentials (default to opvault/opvault/opvault):
 POSTGRES_USER=opvault
 POSTGRES_PASSWORD=opvault
 POSTGRES_DB=opvault
 ```
+> `DATABASE_URL` in `.env` is ignored by the containers — the app/migrate/tools services point
+> themselves at the `db` service automatically. It only matters if you run things on the host.
 
-## 3. Create the schema
+## 3. Start everything
 
 ```bash
-npm ci
-npm run db:deploy      # prisma migrate deploy — applies prisma/migrations
-npm run db:generate
+docker compose up -d --build
 ```
 
-## 4. Get data — pick ONE
+This starts four things:
+- **db** — Postgres (data persisted in the `pgdata` volume)
+- **migrate** — applies `prisma migrate deploy`, then exits
+- **app** — the site on **http://&lt;pi-ip&gt;:3000**
+- **cron** — calls the price-sync endpoint every 3 days
 
-**A) Fresh import**
+Check status / logs:
 ```bash
-npm run seed:owner                 # creates the owner account from OWNER_EMAIL/OWNER_PASSWORD
-npm run import:pc:full -- --min=11 # imports the JP catalog (needs PRICECHARTING_TOKEN)
-npm run resolve:owned              # resolves any owned off-catalog cards
-npm run job:daily                  # pulls current prices
+docker compose ps
+docker compose logs -f app
 ```
 
-**B) Copy existing data from Neon**
+## 4. Seed data (one-off)
+
+The `tools` service runs the maintenance scripts (it uses the full build image). Run once:
 ```bash
-# Dump from Neon (uses your current cloud DATABASE_URL):
-pg_dump "postgresql://USER:PASS@HOST/neondb?sslmode=require" \
-  --no-owner --no-privileges -Fc -f neon.dump
-# Restore into the local DB:
+docker compose run --rm tools npm run seed:owner                 # create your owner account
+docker compose run --rm tools npm run import:pc:full -- --min=11 # import the JP catalog
+docker compose run --rm tools npm run resolve:owned             # resolve owned off-catalog cards
+docker compose run --rm tools npm run job:daily                 # pull prices now (cron also does this)
+```
+
+### Or: copy existing data from Neon
+```bash
+pg_dump "postgresql://USER:PASS@HOST/neondb?sslmode=require" --no-owner --no-privileges -Fc -f neon.dump
 pg_restore --no-owner --clean --if-exists \
-  -d "postgresql://opvault:opvault@localhost:5432/opvault" neon.dump
+  -d "postgresql://opvault:opvault@localhost:5432/opvault" neon.dump   # db port is published on the host
 ```
 
-## 5. Run the app
+## 5. Update after a code change
 
 ```bash
-npm run build
-npm start            # serves on http://<pi-ip>:3000
+git pull
+docker compose up -d --build        # rebuilds app + migrate, re-applies new migrations, restarts
 ```
 
-Optional systemd unit (`/etc/systemd/system/opvault.service`):
-```ini
-[Unit]
-Description=OP Vault
-After=network.target docker.service
+## Useful commands
 
-[Service]
-WorkingDirectory=/home/pi/op-tcg-tracker
-ExecStart=/usr/bin/npm start
-Restart=on-failure
-EnvironmentFile=/home/pi/op-tcg-tracker/.env
-
-[Install]
-WantedBy=multi-user.target
-```
 ```bash
-sudo systemctl enable --now opvault
+docker compose down                 # stop (keeps data)
+docker compose down -v              # stop and DELETE the database volume
+docker compose logs -f cron         # watch the scheduler
+docker compose run --rm tools sh    # shell with full deps for ad-hoc scripts
 ```
 
-## 6. Schedule the price job (replaces Vercel cron)
+## Notes
 
-`crontab -e` → run every 3 days at 04:00:
-```cron
-0 4 */3 * * cd /home/pi/op-tcg-tracker && /usr/bin/npm run job:daily >> /home/pi/opvault-cron.log 2>&1
-```
-
-## Switching back to Neon
-
-Set `DATABASE_URL` back to the Neon URL and restart. No migration or code change needed.
+- First build on a Pi 4 can take several minutes (`next build` is CPU/RAM heavy). It's a one-time cost
+  per code change.
+- To point at Neon instead of the local DB, run only the `app` service is not enough — the app forces
+  the `db` host. For cloud DB, run the app outside compose (`npm run build && npm start`) with your
+  Neon `DATABASE_URL`. The Docker stack is meant for the all-local Pi setup.
