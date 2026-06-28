@@ -2,7 +2,8 @@
 
 import { useActionState } from "react";
 import { registerAction, type ActionState } from "@/app/actions/auth";
-import { Input } from "@/components/ui/Field";
+import { Input, Label } from "@/components/ui/Field";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Button } from "@/components/ui/Button";
 
 export default function RegisterPage() {
@@ -17,10 +18,22 @@ export default function RegisterPage() {
         <form action={action} className="space-y-3 rounded-xl border border-line bg-surface p-6 shadow-[var(--shadow-pop)]">
           <h1 className="text-lg font-semibold">Registrieren</h1>
           <p className="text-sm text-muted">Nur mit Einladungscode.</p>
-          <Input name="displayName" placeholder="Anzeigename" required />
-          <Input name="email" type="email" placeholder="E-Mail" required />
-          <Input name="password" type="password" placeholder="Passwort (min. 8 Zeichen)" required />
-          <Input name="code" placeholder="Invite-Code (OP-XXXXXX)" required />
+          <label className="block">
+            <Label>Anzeigename</Label>
+            <Input name="displayName" autoComplete="nickname" required />
+          </label>
+          <label className="block">
+            <Label>E-Mail</Label>
+            <Input name="email" type="email" autoComplete="email" required />
+          </label>
+          <label className="block">
+            <Label>Passwort (min. 8 Zeichen)</Label>
+            <PasswordInput name="password" autoComplete="new-password" minLength={8} required />
+          </label>
+          <label className="block">
+            <Label>Invite-Code (OP-XXXXXX)</Label>
+            <Input name="code" required />
+          </label>
           {state?.error && <p className="text-sm text-down">{state.error}</p>}
           <Button type="submit" disabled={pending} className="w-full">
             {pending ? "..." : "Account erstellen"}

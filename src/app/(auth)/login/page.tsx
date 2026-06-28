@@ -1,16 +1,31 @@
+import { AuthError } from "next-auth";
+import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
-import { Input } from "@/components/ui/Field";
+import { Input, Label } from "@/components/ui/Field";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Button } from "@/components/ui/Button";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
+
   async function login(formData: FormData) {
     "use server";
-    await signIn("credentials", {
-      email: String(formData.get("email")),
-      password: String(formData.get("password")),
-      redirectTo: "/",
-    });
+    try {
+      await signIn("credentials", {
+        email: String(formData.get("email")),
+        password: String(formData.get("password")),
+        redirectTo: "/",
+      });
+    } catch (e) {
+      if (e instanceof AuthError) redirect("/login?error=1");
+      throw e; // re-throw Next's redirect signal
+    }
   }
+
   return (
     <main className="min-h-screen grid place-items-center bg-vault text-ink p-6">
       <div className="w-full max-w-sm">
@@ -20,8 +35,19 @@ export default function LoginPage() {
         </div>
         <form action={login} className="space-y-3 rounded-xl border border-line bg-surface p-6 shadow-[var(--shadow-pop)]">
           <h1 className="text-lg font-semibold">Login</h1>
-          <Input name="email" type="email" placeholder="E-Mail" required />
-          <Input name="password" type="password" placeholder="Passwort" required />
+          {error && (
+            <p className="text-sm text-down" role="alert">
+              E-Mail oder Passwort ist falsch.
+            </p>
+          )}
+          <label className="block">
+            <Label>E-Mail</Label>
+            <Input name="email" type="email" autoComplete="email" required />
+          </label>
+          <label className="block">
+            <Label>Passwort</Label>
+            <PasswordInput name="password" autoComplete="current-password" required />
+          </label>
           <Button type="submit" className="w-full">Einloggen</Button>
           <a href="/register" className="block text-center text-sm text-muted hover:text-ink transition-colors">
             Mit Invite registrieren
