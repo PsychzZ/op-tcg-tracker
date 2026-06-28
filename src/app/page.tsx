@@ -13,9 +13,15 @@ import type { Grade } from "@/domain/card";
 const GRADES: Grade[] = ["raw", "psa9", "psa10"];
 const GRADE_LABEL: Record<Grade, string> = { raw: "Raw", psa9: "PSA 9", psa10: "PSA 10" };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string }>;
+}) {
   const user = await requireUser();
-  const { totals, movers, count, holdings, history, change30 } = await getDashboard(user.id);
+  const sp = await searchParams;
+  const range = sp.range === "30" || sp.range === "365" ? Number(sp.range) : 90;
+  const { totals, movers, count, holdings, history, change30 } = await getDashboard(user.id, range);
   const total = totals.raw + totals.psa9 + totals.psa10;
   const up = (change30.pct ?? 0) >= 0;
   const series = history.map((h) => h.value);
@@ -56,6 +62,20 @@ export default async function DashboardPage() {
 
           {series.length >= 2 ? (
             <div className="w-full md:w-72">
+              <div className="flex justify-end gap-1 mb-1">
+                {[30, 90, 365].map((d) => (
+                  <Link
+                    key={d}
+                    href={d === 90 ? "/" : `/?range=${d}`}
+                    className={cn(
+                      "rounded-md px-2 py-0.5 text-[11px] transition-colors",
+                      range === d ? "bg-raised text-ink" : "text-dim hover:text-ink",
+                    )}
+                  >
+                    {d === 365 ? "1J" : `${d}T`}
+                  </Link>
+                ))}
+              </div>
               <Sparkline data={series} id="portfolio" className="h-16 w-full" />
               <div className="mt-1 flex justify-between text-[10px] text-dim tabular-nums">
                 <span>{history[0].date}</span>

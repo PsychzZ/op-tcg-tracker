@@ -53,7 +53,7 @@ async function portfolioHistory(
   });
 }
 
-export async function getDashboard(userId: string) {
+export async function getDashboard(userId: string, rangeDays = 90) {
   const items = await db.collectionItem.findMany({ where: { userId }, include: { card: true } });
 
   const cardIds = [...new Set(items.map((i) => i.cardId))];
@@ -69,7 +69,7 @@ export async function getDashboard(userId: string) {
   }
 
   // Portfolio trend (90d series for the sparkline) + 30d change.
-  const history = await portfolioHistory(items, 90);
+  const history = await portfolioHistory(items, rangeDays);
   let change30 = { pct: null as number | null, eur: 0 };
   if (history.length >= 2) {
     const latest = history[history.length - 1].value;
