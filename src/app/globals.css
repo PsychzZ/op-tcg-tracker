@@ -1,26 +1,58 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* Surfaces */
+  --color-vault: #1a1b1e;
+  --color-surface: #232427;
+  --color-raised: #2a2c30;
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-strong: rgba(255, 255, 255, 0.14);
+
+  /* Text */
+  --color-ink: #f3f4f5;
+  --color-muted: #a9adb4;
+  --color-dim: #797d84;
+
+  /* Accent + semantic */
+  --color-gold: #d8b143;
+  --color-gold-soft: #e6c66b;
+  --color-up: #6ad29b;
+  --color-down: #e08a8a;
+
+  /* Chart grades */
+  --color-psa10: #d8b143;
+  --color-psa9: #eef0f3;
+  --color-raw: #888c93;
+
+  /* Type + shape */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --radius: 0.75rem;
+
+  /* Elevation */
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--color-vault);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-vault);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Gentle, consistent focus ring for interactive elements */
+*:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-gold) 70%, transparent);
+  outline-offset: 1px;
+}
+
+/* Thin dark scrollbars to match the vault */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
 }

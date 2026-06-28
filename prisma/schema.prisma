@@ -46,6 +46,7 @@ enum Category {
 enum PriceSource {
   ebaySold
   freeApi
+  priceCharting
 }
 
 enum SyncStatus {

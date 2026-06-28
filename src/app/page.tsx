@@ -1,66 +1,138 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { AppShell } from "@/components/AppShell";
+import { CollectionCard } from "@/components/CollectionCard";
+import { Panel, PanelHeader } from "@/components/ui/Panel";
+import { Button } from "@/components/ui/Button";
+import { Sparkline } from "@/components/ui/Sparkline";
 import { getDashboard } from "@/services/dashboard";
 import { formatEur } from "@/domain/money";
+import { cn } from "@/lib/cn";
+import type { Grade } from "@/domain/card";
+
+const GRADES: Grade[] = ["raw", "psa9", "psa10"];
+const GRADE_LABEL: Record<Grade, string> = { raw: "Raw", psa9: "PSA 9", psa10: "PSA 10" };
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const { totals, movers, distribution, count } = await getDashboard(user.id);
-
-  const kpis = [
-    { label: "Wert · Raw", value: totals.raw },
-    { label: "Wert · PSA 9", value: totals.psa9 },
-    { label: "Wert · PSA 10", value: totals.psa10 },
-  ];
+  const { totals, movers, count, holdings, history, change30 } = await getDashboard(user.id);
+  const total = totals.raw + totals.psa9 + totals.psa10;
+  const up = (change30.pct ?? 0) >= 0;
+  const series = history.map((h) => h.value);
 
   return (
     <AppShell>
-      <h1 className="text-lg font-semibold mb-4">Dashboard</h1>
-
-      <div className="flex flex-wrap gap-3 mb-6">
-        {kpis.map((k) => (
-          <div key={k.label} className="flex-1 min-w-[180px] border border-white/10 rounded-[10px] bg-[#26272b] p-4">
-            <div className="text-[10px] tracking-widest uppercase text-[#82858c] mb-2">{k.label}</div>
-            <div className="text-2xl font-bold tabular-nums">{formatEur(k.value)}</div>
-          </div>
-        ))}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-sm text-muted mt-1">Deine Sammlung auf einen Blick</p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        <section className="border border-white/10 rounded-[10px] bg-[#26272b] p-4">
-          <h2 className="text-sm font-semibold mb-3">Top-Mover (PSA 10, 30T)</h2>
-          {movers.length === 0 ? (
-            <p className="text-sm text-[#82858c]">Noch keine Trenddaten (brauchen ~30 Tage Historie).</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {movers.map((m) => (
-                <li key={m.cardId} className="flex justify-between">
-                  <a href={`/cards/${m.cardId}`} className="text-[#b0b3b8] hover:text-[#f3f4f5]">{m.name}</a>
-                  <span className={m.pct >= 0 ? "text-[#6ad29b]" : "text-[#e08a8a]"}>
-                    {m.pct >= 0 ? "▲" : "▼"} {m.pct}%
+      {/* Hero: total value + 30d change + trend sparkline */}
+      <Panel className="p-6 mb-4">
+        <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-center">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.12em] text-dim">Sammlungswert</div>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-1.5">
+              <div className="text-4xl font-bold tabular-nums text-gold">{formatEur(total)}</div>
+              {change30.pct !== null && (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums",
+                    up ? "bg-up/12 text-up" : "bg-down/12 text-down",
+                  )}
+                >
+                  {up ? "▲" : "▼"} {Math.abs(change30.pct)}%
+                  <span className="text-dim font-normal">
+                    {up ? "+" : "−"}
+                    {formatEur(Math.abs(change30.eur))}
                   </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+                </span>
+              )}
+            </div>
+            <div className="text-sm text-muted mt-1.5">
+              {count} {count === 1 ? "Position" : "Positionen"} · 30 Tage
+            </div>
+          </div>
 
-        <section className="border border-white/10 rounded-[10px] bg-[#26272b] p-4">
-          <h2 className="text-sm font-semibold mb-3">Verteilung ({count} Karten)</h2>
-          {Object.keys(distribution).length === 0 ? (
-            <p className="text-sm text-[#82858c]">Deine Sammlung ist leer.</p>
+          {series.length >= 2 ? (
+            <div className="w-full md:w-72">
+              <Sparkline data={series} id="portfolio" className="h-16 w-full" />
+              <div className="mt-1 flex justify-between text-[10px] text-dim tabular-nums">
+                <span>{history[0].date}</span>
+                <span>{history[history.length - 1].date}</span>
+              </div>
+            </div>
           ) : (
-            <ul className="space-y-1 text-sm">
-              {Object.entries(distribution).map(([rarity, n]) => (
-                <li key={rarity} className="flex justify-between">
-                  <span className="text-[#b0b3b8]">{rarity}</span>
-                  <span className="tabular-nums">{n}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="hidden md:flex w-72 h-16 items-center justify-center rounded-lg border border-dashed border-line text-[11px] text-dim">
+              Noch kein Verlauf
+            </div>
           )}
-        </section>
+        </div>
+      </Panel>
+
+      {/* Grade breakdown with share bars */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        {GRADES.map((g) => {
+          const share = total > 0 ? Math.round((totals[g] / total) * 100) : 0;
+          return (
+            <Panel key={g} className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.1em] text-dim">
+                  <span className="w-2 h-2 rounded-full" style={{ background: `var(--color-${g})` }} />
+                  {GRADE_LABEL[g]}
+                </span>
+                <span className="text-[11px] text-dim tabular-nums">{share}%</span>
+              </div>
+              <div className="text-xl font-bold tabular-nums mt-1.5">{formatEur(totals[g])}</div>
+              <div className="mt-2 h-1.5 rounded-full bg-raised overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: `${share}%`, background: `var(--color-${g})` }} />
+              </div>
+            </Panel>
+          );
+        })}
       </div>
+
+      {/* Meine Sammlung — the cards themselves */}
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-base font-semibold">Meine Sammlung</h2>
+        <Link href="/cards" className="text-xs text-dim hover:text-ink transition-colors">
+          Karten durchstöbern →
+        </Link>
+      </div>
+
+      {holdings.length === 0 ? (
+        <Panel className="p-10 text-center">
+          <p className="text-muted">Noch keine Karten in deiner Sammlung.</p>
+          <Link href="/cards" className="inline-block mt-4">
+            <Button>Karten durchstöbern</Button>
+          </Link>
+        </Panel>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          {holdings.map((h) => (
+            <CollectionCard key={h.id} card={h.card} grade={h.grade} quantity={h.quantity} valueEur={h.valueEur} />
+          ))}
+        </div>
+      )}
+
+      {/* Top movers (secondary) */}
+      {movers.length > 0 && (
+        <Panel className="p-5 mt-6 max-w-xl">
+          <PanelHeader title="Top-Mover · PSA 10 · 30 Tage" />
+          <ul className="mt-4 space-y-2.5">
+            {movers.map((m) => (
+              <li key={m.cardId} className="flex items-center justify-between gap-3 text-sm">
+                <Link href={`/cards/${m.cardId}`} className="text-muted hover:text-ink truncate transition-colors">
+                  {m.name}
+                </Link>
+                <span className={cn("tabular-nums font-medium whitespace-nowrap", m.pct >= 0 ? "text-up" : "text-down")}>
+                  {m.pct >= 0 ? "▲" : "▼"} {Math.abs(m.pct)}%
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
     </AppShell>
   );
 }

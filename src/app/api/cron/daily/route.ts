@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { runDailyUpdate } from "@/services/daily-update";
+import { runPriceSync } from "@/services/price-sync";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// Self-hosted (Raspberry Pi) has no serverless timeout; the bulk console scrape takes a few minutes.
+export const maxDuration = 800;
 
 export async function GET(request: Request) {
   const auth = request.headers.get("authorization");
@@ -10,7 +11,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   try {
-    const result = await runDailyUpdate();
+    const result = await runPriceSync();
     return NextResponse.json({ status: "ok", ...result });
   } catch (e) {
     return NextResponse.json({ status: "error", message: String(e) }, { status: 500 });

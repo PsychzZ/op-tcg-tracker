@@ -9,5 +9,6 @@ export async function toggleWatchAction(formData: FormData) {
   const cardId = String(formData.get("cardId"));
   await toggleWatch(user.id, cardId);
   revalidatePath("/watchlist");
+  revalidatePath("/cards");
   revalidatePath(`/cards/${cardId}`);
 }

@@ -15,6 +15,12 @@
     "db:studio": "prisma studio",
     "seed:owner": "tsx scripts/seed-owner.ts",
     "import:catalog": "tsx scripts/import-catalog.ts",
+    "import:pc": "tsx scripts/import-pricecharting.ts",
+    "import:pc:full": "tsx scripts/import-pricecharting-full.ts",
+    "backfill:images": "tsx scripts/backfill-pc-images.ts",
+    "resolve:owned": "tsx scripts/resolve-owned.ts",
+    "normalize:catalog": "tsx scripts/normalize-catalog.ts",
+    "prune:catalog": "tsx scripts/prune-catalog.ts",
     "job:daily": "tsx scripts/run-daily.ts"
   },
   "dependencies": {

@@ -1,8 +1,8 @@
 import "dotenv/config";
 import { db } from "../src/lib/db";
-import { runDailyUpdate } from "../src/services/daily-update";
+import { runPriceSync } from "../src/services/price-sync";
 
-runDailyUpdate()
+runPriceSync()
   .then((r) => console.log("Done:", r))
   .catch((e) => console.error(e))
   .finally(() => db.$disconnect());

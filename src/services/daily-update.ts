@@ -3,13 +3,13 @@ import { isTrackable, type Grade } from "@/domain/card";
 import { convertToEur } from "@/domain/fx";
 import { resolvePrice } from "@/domain/price-resolver";
 import { fetchEcbRates } from "@/lib/providers/ecb-fx";
-import { freeApiProvider } from "@/lib/providers/free-api";
+import { priceChartingProvider } from "@/lib/providers/pricecharting";
 import { ebaySoldProvider } from "@/lib/providers/ebay-sold";
-import { tcgGoProvider } from "@/lib/providers/tcggo";
 import type { ProviderPrice } from "@/lib/providers/types";
 
 const GRADES: Grade[] = ["raw", "psa9", "psa10"];
-const PROVIDERS = [tcgGoProvider, ebaySoldProvider, freeApiProvider];
+// Raw comes from PriceCharting (aggregated market price); PSA 9/10 from eBay-sold.
+const PROVIDERS = [priceChartingProvider, ebaySoldProvider];
 
 function utcMidnight(): Date {
   return new Date(new Date().toISOString().slice(0, 10));
@@ -32,12 +32,24 @@ export async function runDailyUpdate() {
       });
     }
 
+    // eBay-sold (Apify) is metered, so we only query PSA prices for cards a user
+    // actually owns or watches — not the whole catalog. Raw stays catalog-wide.
+    const [collected, watched] = await Promise.all([
+      db.collectionItem.findMany({ select: { cardId: true } }),
+      db.watchlistItem.findMany({ select: { cardId: true } }),
+    ]);
+    const ownedOrWatched = new Set<string>([
+      ...collected.map((c) => c.cardId),
+      ...watched.map((w) => w.cardId),
+    ]);
+
     const cards = await db.card.findMany();
     for (const card of cards) {
       if (!isTrackable(card)) continue;
 
       const perGrade = new Map<Grade, ProviderPrice[]>();
       for (const provider of PROVIDERS) {
+        if (provider.name === "ebaySold" && !ownedOrWatched.has(card.id)) continue;
         let prices: ProviderPrice[] = [];
         try {
           prices = await provider.getPrices(card, GRADES);
