@@ -1,0 +1,21 @@
+# Local Postgres for self-hosting (e.g. Raspberry Pi). See docs/self-hosting-pi.md.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-opvault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opvault}
+      POSTGRES_DB: ${POSTGRES_DB:-opvault}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-opvault}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
