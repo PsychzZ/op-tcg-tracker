@@ -41,6 +41,9 @@ const PAGE = `
 <dl class="modalCol" id="broken-id">
   <dt><div class="cardName">番号なし</div></dt>
 </dl>
+<dl class="modalCol" id="DON!!">
+  <dt><div class="cardName">ドン!!カード</div></dt>
+</dl>
 <dl class="modalCol" id="P-063_p1">
   <dt>
     <div class="infoCol"><span>P-063</span> | <span>P</span> | <span>CHARACTER</span></div>
@@ -58,8 +61,18 @@ describe("splitCardId", () => {
     expect(splitCardId("st18-005")).toEqual({ number: "ST18-005", artwork: null });
   });
 
+  it("accepts both promo number shapes, with and without an artwork suffix", () => {
+    // "P-BVB-001" is a real collab promo number; rejecting it would leave those cards unnamed.
+    expect(splitCardId("P-BVB-001")).toEqual({ number: "P-BVB-001", artwork: null });
+    expect(splitCardId("P-BVB-001_p2")).toEqual({ number: "P-BVB-001", artwork: "p2" });
+    expect(splitCardId("P-063")).toEqual({ number: "P-063", artwork: null });
+    expect(splitCardId("PRB01-001_p1")).toEqual({ number: "PRB01-001", artwork: "p1" });
+  });
+
   it("rejects ids that are not card numbers", () => {
-    expect(splitCardId("broken-id")).toBeNull();
+    expect(splitCardId("broken-id")).toBeNull(); // no digit at all
+    expect(splitCardId("DON!!")).toBeNull(); // not hyphenated alphanumerics
+    expect(splitCardId("OP13-051!")).toBeNull(); // trailing junk
     expect(splitCardId("")).toBeNull();
   });
 });

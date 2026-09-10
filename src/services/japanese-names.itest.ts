@@ -113,4 +113,31 @@ describe("japanese name fill (integration)", () => {
     expect(calls.filter((u) => u.includes("series="))).toHaveLength(2);
     expect(result.updated).toBe(1);
   });
+
+  it("reports an unavailable series page as an error instead of as missing data", async () => {
+    const card = await makeCard("OP13-051", "e");
+    // The shared fetchText returns "" (it never throws) when a page stays unavailable.
+    const fetchPage = async (url: string) => (url.includes("series=") ? "" : INDEX);
+
+    const result = await fillJapaneseNames({ cardIds: [card.id], fetchPage, delayMs: 0 });
+
+    expect(result.series).toBe(0);
+    expect(result.updated).toBe(0);
+    expect(result.errors.join(" ")).toContain("empty response");
+    // The card is still "missing" — we simply could not learn otherwise — but the error says why.
+    expect(result.missing).toBe(1);
+  });
+
+  it("reports an unavailable index page and writes nothing", async () => {
+    const card = await makeCard("OP13-051", "f");
+    const fetchPage = async () => "";
+
+    const result = await fillJapaneseNames({ cardIds: [card.id], fetchPage, delayMs: 0 });
+
+    expect(result.candidates).toBe(1);
+    expect(result.updated).toBe(0);
+    expect(result.errors.join(" ")).toContain("no series ids found");
+    const stored = await db.card.findUnique({ where: { id: card.id } });
+    expect(stored?.nameJp).toBeNull();
+  });
 });

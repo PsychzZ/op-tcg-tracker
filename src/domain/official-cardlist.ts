@@ -40,11 +40,22 @@ function text(html: string): string {
     .trim();
 }
 
-/** "EB04-061_p3" → { number: "EB04-061", artwork: "p3" } */
+/**
+ * "EB04-061_p3" → { number: "EB04-061", artwork: "p3" }
+ * "P-BVB-001"    → { number: "P-BVB-001", artwork: null }
+ *
+ * Ids are hyphen-separated alphanumerics plus an optional `_suffix` for the artwork. A card number
+ * always carries a digit *and* a hyphen — that is what our own numbering looks like (see
+ * `domain/card-set.ts`) — which keeps junk ids ("DON!!", stray words) out. Promo numbers come in two
+ * shapes, `P-063` and `P-BVB-001`, and both must survive or those cards could never get a name.
+ */
 export function splitCardId(id: string): { number: string; artwork: string | null } | null {
-  const match = id.trim().match(/^([A-Za-z]+-?\d{1,4}(?:-[A-Za-z0-9]+)*?)(?:_([A-Za-z0-9]+))?$/);
+  const match = id.trim().match(/^([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*?)(?:_([A-Za-z0-9]+))?$/);
   if (!match) return null;
-  return { number: match[1].toUpperCase(), artwork: match[2] ?? null };
+
+  const number = match[1].toUpperCase();
+  if (!/\d/.test(number) || !number.includes("-")) return null;
+  return { number, artwork: match[2] ?? null };
 }
 
 /** Every series id the page offers, in page order (there are ~60 Japanese sets). */

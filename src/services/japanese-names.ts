@@ -21,7 +21,7 @@ export interface FillNamesOptions {
 }
 
 export interface FillNamesResult {
-  /** Series pages actually fetched. */
+  /** Series pages actually fetched successfully. */
   series: number;
   /** Card blocks parsed across those pages. */
   entries: number;
@@ -37,12 +37,16 @@ export interface FillNamesResult {
  * Fill `Card.nameJp` from the official Japanese card list.
  *
  * The official site is the only source that carries the Japanese names, and its pages key cards by
- * the same number we store (`EB04-061`, `P-063`, …), so this walks the series pages and matches on
- * that number. Nothing is guessed: a card whose number is missing from the pages we fetched is
- * counted as `missing` and left as it was.
+ * the same number we store (`EB04-061`, `P-063`, `P-BVB-001`, …), so this walks the series pages and
+ * matches on that number. Nothing is guessed: a card whose number never shows up is counted as
+ * `missing` and left as it was.
  *
  * Stops early once every wanted number has been found, so a run over a mostly-filled catalog only
  * touches a few pages.
+ *
+ * Note on errors: the shared `fetchText` returns "" rather than throwing when a page stays
+ * unavailable, so an empty response is reported as an error instead of being counted as "this card
+ * simply has no name" — otherwise a blocked scrape would look like a successful, empty-handed run.
  */
 export async function fillJapaneseNames(options: FillNamesOptions = {}): Promise<FillNamesResult> {
   const { maxSeries, refill = false, cardIds, fetchPage = fetchText, delayMs = 1000 } = options;
@@ -70,14 +74,24 @@ export async function fillJapaneseNames(options: FillNamesOptions = {}): Promise
   if (wanted.size === 0) return result;
 
   const seriesIds = parseOfficialSeriesIds(await fetchPage(officialCardListUrl()));
+  if (seriesIds.length === 0) {
+    errors.push("cardlist index: no series ids found (page unavailable or markup changed)");
+    return result;
+  }
   const selected = maxSeries ? seriesIds.slice(0, maxSeries) : seriesIds;
 
   const found = new Map<string, string>();
-  for (const [index, seriesId] of selected.entries()) {
-    if (index > 0) await sleep(delayMs);
+  for (const [position, seriesId] of selected.entries()) {
+    if (position > 0) await sleep(delayMs);
     // Isolate each set: one unavailable page must not abort the fill.
     try {
-      const entries = parseOfficialCardList(await fetchPage(officialCardListUrl(seriesId)));
+      const html = await fetchPage(officialCardListUrl(seriesId));
+      if (!html) {
+        errors.push(`series ${seriesId}: empty response`);
+        continue;
+      }
+
+      const entries = parseOfficialCardList(html);
       result.series++;
       result.entries += entries.length;
       for (const [number, nameJp] of nameByNumber(entries)) {
