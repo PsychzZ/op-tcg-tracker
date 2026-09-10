@@ -28,6 +28,14 @@ describe("isAuthorizedCron", () => {
     expect(isAuthorizedCron(request("Bearer s3cret-token-extra"))).toBe(false);
   });
 
+  it("rejects a same-length token, exercising the constant-time comparison", () => {
+    process.env.CRON_SECRET = "s3cret-token";
+    // Both are exactly as long as "Bearer s3cret-token", so they reach timingSafeEqual and must
+    // still be rejected — a plain string comparison would pass these by accident.
+    expect(isAuthorizedCron(request("Bearer s3cret-tokeX"))).toBe(false);
+    expect(isAuthorizedCron(request("Bearer s3cret-toke "))).toBe(false);
+  });
+
   it("authorises nothing when CRON_SECRET is unset", () => {
     delete process.env.CRON_SECRET;
     // The historical bug: `Bearer undefined` used to match an unset secret.

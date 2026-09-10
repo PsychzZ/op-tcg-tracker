@@ -78,10 +78,17 @@ export async function recordSale(input: RecordSaleInput) {
       },
     });
 
-    const { quantity: remaining } = await tx.collectionItem.update({
-      where: { id: item.id },
-      data: { quantity: { decrement: quantity } },
-    });
+    let remaining: number;
+    try {
+      ({ quantity: remaining } = await tx.collectionItem.update({
+        where: { id: item.id },
+        data: { quantity: { decrement: quantity } },
+      }));
+    } catch (e) {
+      // The row vanished underneath us (a competing sale of the last unit) — nothing left to sell.
+      if (isRecordNotFound(e)) throw new SaleError("NOT_OWNED");
+      throw e;
+    }
     if (remaining < 0) throw new SaleError("BAD_QUANTITY");
     if (remaining === 0) {
       // A competing transaction may have removed the row first; the holding is gone either way,
