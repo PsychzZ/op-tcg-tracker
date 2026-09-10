@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import { runPriceSync } from "@/services/price-sync";
+import { isAuthorizedCron } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 // Self-hosted (Raspberry Pi) has no serverless timeout; the bulk console scrape takes a few minutes.
 export const maxDuration = 800;
 
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  const auth = request.headers.get("authorization");
-  // An unset secret must never authorise anything ("Bearer undefined" would match).
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   try {

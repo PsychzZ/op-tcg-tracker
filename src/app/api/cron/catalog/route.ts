@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { refreshCatalog } from "@/services/catalog-refresh";
+import { isAuthorizedCron } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 // One page per Japanese set, ~1.2 s apart: fine self-hosted, but on Vercel mind the function
@@ -11,10 +12,7 @@ export const maxDuration = 800;
  * them by hand. Protected by the same bearer secret as the price sync.
  */
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  const auth = request.headers.get("authorization");
-  // An unset secret must never authorise anything ("Bearer undefined" would match).
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   try {

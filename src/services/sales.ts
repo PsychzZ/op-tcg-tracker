@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import type { Grade } from "@/domain/card";
 import { realizedTotals, type RealizedTotals, type SaleTerms } from "@/domain/sale";
@@ -38,6 +39,11 @@ export interface RecordSaleInput {
 
 export class SaleError extends Error {}
 
+/** Prisma's "record not found" (P2025): the row was removed by a competing transaction. */
+function isRecordNotFound(e: unknown): boolean {
+  return e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025";
+}
+
 /**
  * Records a sale and reduces (or removes) the matching holding in one transaction, so the collection
  * and the sale history can never disagree. The purchase price is copied onto the sale as its cost
@@ -77,7 +83,15 @@ export async function recordSale(input: RecordSaleInput) {
       data: { quantity: { decrement: quantity } },
     });
     if (remaining < 0) throw new SaleError("BAD_QUANTITY");
-    if (remaining === 0) await tx.collectionItem.delete({ where: { id: item.id } });
+    if (remaining === 0) {
+      // A competing transaction may have removed the row first; the holding is gone either way,
+      // which is exactly what this sale wanted.
+      try {
+        await tx.collectionItem.delete({ where: { id: item.id } });
+      } catch (e) {
+        if (!isRecordNotFound(e)) throw e;
+      }
+    }
 
     return sale;
   });
