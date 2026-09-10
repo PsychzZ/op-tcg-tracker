@@ -2,27 +2,12 @@ import { db } from "@/lib/db";
 import { convertToEur } from "@/domain/fx";
 import { fetchEcbRates } from "@/lib/providers/ecb-fx";
 import { parseConsoleSlugs, parseConsoleRows, type ConsoleRow } from "@/domain/pricecharting-console";
+import { PC_CATEGORY_URL, PC_CONSOLE_URL, fetchText, sleep } from "@/lib/providers/pricecharting-scrape";
+import { evaluateAlerts } from "@/services/alerts";
 import type { Grade } from "@/domain/card";
-
-const CATEGORY = "https://www.pricecharting.com/category/one-piece-cards";
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function utcMidnight(): Date {
   return new Date(new Date().toISOString().slice(0, 10));
-}
-
-async function fetchText(url: string): Promise<string> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-      if (res.ok) return await res.text();
-      if (res.status === 429) await sleep(3000);
-    } catch {
-      /* retry */
-    }
-    await sleep(1000);
-  }
-  return "";
 }
 
 const GRADE_FIELDS: Array<[keyof ConsoleRow, Grade]> = [
@@ -67,9 +52,9 @@ export async function runPriceSync() {
     }
 
     // JP sets from the category page, plus any extra console a stored card points to.
-    const slugs = [...new Set([...parseConsoleSlugs(await fetchText(CATEGORY)), ...ownedConsoles])];
+    const slugs = [...new Set([...parseConsoleSlugs(await fetchText(PC_CATEGORY_URL)), ...ownedConsoles])];
     for (const slug of slugs) {
-      const rows = parseConsoleRows(await fetchText(`https://www.pricecharting.com/console/${slug}`));
+      const rows = parseConsoleRows(await fetchText(PC_CONSOLE_URL(slug)));
       const ops = [];
       for (const row of rows) {
         const cardId = byPcId.get(row.id);
@@ -99,11 +84,22 @@ export async function runPriceSync() {
       await sleep(1200);
     }
 
+    // Target-price alerts ride along with the price sync: crossings are detected against the
+    // snapshots written above, so an alert can never lag behind the prices that caused it.
+    let alerts = 0;
+    try {
+      const alertRun = await evaluateAlerts(date);
+      alerts = alertRun.triggered.length;
+      errors.push(...alertRun.errors);
+    } catch (e) {
+      errors.push(`alerts:${String(e)}`);
+    }
+
     await db.syncRun.update({
       where: { id: run.id },
       data: { status: "success", finishedAt: new Date(), cardsUpdated: updated, errors: errors.length ? errors : undefined },
     });
-    return { updated, errors };
+    return { updated, alerts, errors };
   } catch (e) {
     await db.syncRun.update({
       where: { id: run.id },

@@ -3,6 +3,10 @@ import type { NextAuthConfig } from "next-auth";
 export const authConfig = {
   pages: { signIn: "/login" },
   session: { strategy: "jwt" },
+  // Auth.js v5 only trusts the Host header in development unless told otherwise, and rejects the
+  // request with "UntrustedHost" (a 500 on every /api/auth/* route) in production. This app is
+  // self-hosted — the Pi's own port, or Vercel — so there is no untrusted proxy in front of it.
+  trustHost: true,
   providers: [], // real provider added in auth.ts (kept out of edge proxy)
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {

@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.env
+.env.local
+.env.*.local
+.idea
+.vscode
+.superpowers
+docs/superpowers
+npm-debug.log*
+*.tsbuildinfo

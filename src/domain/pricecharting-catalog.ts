@@ -54,23 +54,24 @@ function tagRarity(tags: string[]): Rarity | null {
   return null;
 }
 
-function tagVariant(tags: string[]): Variant {
-  const joined = tags.join(" ").toLowerCase();
-  if (/serial|numbered/.test(joined)) return "serial";
-  if (/manga|comic/.test(joined)) return "mangaArt";
-  if (/parallel/.test(joined)) return "parallel";
-  if (/alt(ernate)? art/.test(joined)) return "altArt";
+/**
+ * Variant markers appear either as bracket tags ("[Alternate Art]") or inline in the product name
+ * ("Monkey D. Luffy (Alternate Art) OP01-003"). Both spellings mean the same thing, and missing one
+ * would both mislabel the row and point the UI at the wrong artwork — so the whole name is scanned.
+ */
+function variantOf(productName: string, tags: string[]): Variant {
+  const text = `${tags.join(" ")} ${productName}`.toLowerCase();
+  if (/serial|numbered|signed/.test(text)) return "serial";
+  if (/manga|comic/.test(text)) return "mangaArt";
+  if (/parallel/.test(text)) return "parallel";
+  if (/alt(ernate|ernative)?\s*art/.test(text)) return "altArt";
   return "normal";
 }
 
 /**
- * Classify a PriceCharting product into a trackable special card, or return null to skip.
- * Skips: non-Japanese sets, DON!! cards, and plain base cards (no special rarity/variant/promo).
- * Display rarity is best-effort: an explicit tag wins; otherwise inferred from context.
- */
-/**
- * Classify any Japanese One Piece product into a catalog card (no special-card gate).
- * Returns null only for non-Japanese sets and DON!! cards. Display rarity is best-effort.
+ * Classify any Japanese One Piece product into a catalog card (no special-card gate — callers apply
+ * `isTrackable` when they only want specials). Returns null for non-Japanese sets, DON!! cards and
+ * sealed products. Rarity is best-effort: an explicit tag wins, otherwise it is inferred.
  */
 export function classifyPcCard(p: PcSearchProduct): PcCatalogCard | null {
   if (!isJapaneseOnePiece(p["console-name"])) return null;
@@ -84,7 +85,7 @@ export function classifyPcCard(p: PcSearchProduct): PcCatalogCard | null {
   if (!derived) return null;
 
   const name = baseName.replace(derived.number, "").replace(/\s+/g, " ").trim() || baseName || productName;
-  const variant = tagVariant(tags);
+  const variant = variantOf(productName, tags);
   const displayRarity: Rarity = tagRarity(tags) ?? (derived.category === "promo" ? "SP" : "SR");
   const id = String(p.id);
 

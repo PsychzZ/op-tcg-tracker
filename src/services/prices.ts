@@ -32,6 +32,33 @@ export async function getLatestRawPrices(cardIds: string[]): Promise<Map<string,
   return map;
 }
 
+/**
+ * Latest price (EUR) per grade for many cards at once → Map<cardId, Record<grade, priceEur>>.
+ * The watchlist needs every grade (not just raw) to decide whether a target price was reached.
+ */
+export async function getLatestGradePrices(
+  cardIds: string[],
+): Promise<Map<string, Record<Grade, number>>> {
+  if (cardIds.length === 0) return new Map();
+  const rows = await db.priceSnapshot.findMany({
+    where: { cardId: { in: cardIds } },
+    orderBy: { date: "desc" },
+    select: { cardId: true, grade: true, priceEur: true },
+  });
+  const map = new Map<string, Record<Grade, number>>();
+  const filled = new Map<string, Set<Grade>>();
+  for (const r of rows) {
+    const seen = filled.get(r.cardId) ?? new Set<Grade>();
+    if (seen.has(r.grade)) continue; // newest-first → first hit per grade wins
+    seen.add(r.grade);
+    filled.set(r.cardId, seen);
+    const rec = map.get(r.cardId) ?? { raw: 0, psa9: 0, psa10: 0 };
+    rec[r.grade] = Number(r.priceEur);
+    map.set(r.cardId, rec);
+  }
+  return map;
+}
+
 export async function getPriceHistory(cardId: string, sinceDays = 365): Promise<SnapshotPoint[]> {
   const since = new Date(Date.now() - sinceDays * 86400_000);
   const rows = await db.priceSnapshot.findMany({

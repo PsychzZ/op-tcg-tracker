@@ -65,6 +65,8 @@ model User {
   collection     CollectionItem[]
   watchlist      WatchlistItem[]
   invitesCreated InviteCode[]     @relation("InviteCreator")
+  alerts         PriceAlert[]
+  sales          Sale[]
 }
 
 model InviteCode {
@@ -99,6 +101,8 @@ model Card {
   watchlistItems   WatchlistItem[]
   priceSnapshots   PriceSnapshot[]
   saleObservations SaleObservation[]
+  alerts           PriceAlert[]
+  sales            Sale[]
 
   @@index([setCode])
   @@index([rarity])
@@ -159,16 +163,59 @@ model SaleObservation {
 }
 
 model WatchlistItem {
-  id          String   @id @default(cuid())
+  id          String       @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   cardId      String
-  card        Card     @relation(fields: [cardId], references: [id])
+  card        Card         @relation(fields: [cardId], references: [id])
   grade       Grade?
-  targetPrice Decimal? @db.Decimal(12, 2)
-  createdAt   DateTime @default(now())
+  targetPrice Decimal?     @db.Decimal(12, 2)
+  createdAt   DateTime     @default(now())
 
   @@unique([userId, cardId])
+}
+
+/// A fired target-price alert. One row per user / card / grade / day keeps the daily job
+/// idempotent (re-running the sync on the same day cannot duplicate an alert).
+model PriceAlert {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cardId       String
+  card         Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  grade        Grade
+  targetPrice  Decimal  @db.Decimal(12, 2)
+  priceEur     Decimal  @db.Decimal(12, 2)
+  snapshotDate DateTime @db.Date
+  triggeredAt  DateTime @default(now())
+  seenAt       DateTime?
+
+  @@unique([userId, cardId, grade, snapshotDate])
+  @@index([userId, seenAt])
+}
+
+/// A sale the user recorded. `costBasisPerUnit` snapshots the purchase price *at sale time*, so the
+/// realized P/L survives even after the CollectionItem is gone. The card relation is Restrict (the
+/// Prisma default for required relations, written out on purpose): a card that was sold carries
+/// history and must not be pruned away — `scripts/prune-catalog.ts` keeps such cards.
+model Sale {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cardId           String
+  card             Card     @relation(fields: [cardId], references: [id], onDelete: Restrict)
+  grade            Grade
+  quantity         Int      @default(1)
+  soldPricePerUnit Decimal  @db.Decimal(12, 2)
+  fees             Decimal? @db.Decimal(12, 2)
+  currency         String   @default("EUR")
+  soldAt           DateTime @db.Date
+  costBasisPerUnit Decimal? @db.Decimal(12, 2)
+  note             String?
+  createdAt        DateTime @default(now())
+
+  @@index([userId, soldAt])
+  @@index([cardId])
 }
 
 model FxRate {

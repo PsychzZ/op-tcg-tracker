@@ -4,8 +4,11 @@ import { AppShell } from "@/components/AppShell";
 import { CollectionCard } from "@/components/CollectionCard";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { getDashboard } from "@/services/dashboard";
+import { countUnseenAlerts, getUserAlerts } from "@/services/alerts";
+import { markAlertsSeenAction } from "@/app/actions/alerts";
 import { formatEur } from "@/domain/money";
 import { cn } from "@/lib/cn";
 import type { Grade } from "@/domain/card";
@@ -21,7 +24,12 @@ export default async function DashboardPage({
   const user = await requireUser();
   const sp = await searchParams;
   const range = sp.range === "30" || sp.range === "365" ? Number(sp.range) : 90;
-  const { totals, movers, count, holdings, history, change30 } = await getDashboard(user.id, range);
+  const [{ totals, movers, count, holdings, history, change30 }, unseenAlerts, unseenCount] =
+    await Promise.all([
+      getDashboard(user.id, range),
+      getUserAlerts(user.id, { unseenOnly: true, take: 5 }),
+      countUnseenAlerts(user.id),
+    ]);
   const total = totals.raw + totals.psa9 + totals.psa10;
   const up = (change30.pct ?? 0) >= 0;
   const series = history.map((h) => h.value);
@@ -89,6 +97,48 @@ export default async function DashboardPage({
           )}
         </div>
       </Panel>
+
+      {/* Target prices that were hit since the last visit */}
+      {unseenAlerts.length > 0 && (
+        <Panel className="p-5 mb-6">
+          <PanelHeader
+            title="Zielpreis erreicht"
+            action={
+              <form action={markAlertsSeenAction}>
+                <Button variant="outline" size="sm" type="submit">
+                  Als gelesen markieren
+                </Button>
+              </form>
+            }
+          />
+          <ul className="mt-4 space-y-2.5">
+            {unseenAlerts.map((a) => (
+              <li key={a.id} className="flex items-center justify-between gap-3 text-sm">
+                <Link
+                  href={`/cards/${a.card.id}`}
+                  className="text-muted hover:text-ink truncate transition-colors"
+                >
+                  {a.card.name}
+                </Link>
+                <span className="flex items-center gap-2 whitespace-nowrap tabular-nums">
+                  <Badge className="border-line-strong text-dim">{GRADE_LABEL[a.grade]}</Badge>
+                  <span className="text-gold">{formatEur(Number(a.priceEur))}</span>
+                  <span className="text-xs text-dim">≤ {formatEur(Number(a.targetPrice))}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {/* "Alle als gelesen" clears everything, so say how many are not listed here. */}
+          {unseenCount > unseenAlerts.length && (
+            <p className="mt-3 text-xs text-dim">
+              +{unseenCount - unseenAlerts.length} weitere ·{" "}
+              <Link href="/watchlist" className="text-muted hover:text-ink transition-colors">
+                alle in der Watchlist ansehen
+              </Link>
+            </p>
+          )}
+        </Panel>
+      )}
 
       {/* Grade breakdown with share bars */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">

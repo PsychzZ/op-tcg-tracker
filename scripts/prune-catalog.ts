@@ -13,6 +13,9 @@ async function main() {
   const cards = await db.card.findMany({ select: { id: true, imageUrl: true } });
   const owned = new Set((await db.collectionItem.findMany({ select: { cardId: true } })).map((c) => c.cardId));
   const watched = new Set((await db.watchlistItem.findMany({ select: { cardId: true } })).map((c) => c.cardId));
+  // Cards the user sold are kept as well: the Sale row carries the realized P/L and its FK would
+  // block the delete anyway.
+  const sold = new Set((await db.sale.findMany({ select: { cardId: true } })).map((s) => s.cardId));
 
   // Best (max) latest grade price per card.
   const snaps = await db.priceSnapshot.findMany({ select: { cardId: true, priceEur: true } });
@@ -24,7 +27,7 @@ async function main() {
     const cheap = (maxPrice.get(c.id) ?? 0) < THRESHOLD;
     const noImage = !c.imageUrl;
     if (!(cheap || noImage)) continue;
-    if (owned.has(c.id) || watched.has(c.id)) continue; // never delete what the user holds
+    if (owned.has(c.id) || watched.has(c.id) || sold.has(c.id)) continue; // never delete what the user holds or sold
 
     await db.$transaction([
       db.priceSnapshot.deleteMany({ where: { cardId: c.id } }),

@@ -1,68 +1,60 @@
 import "dotenv/config";
 import { db } from "../src/lib/db";
-import { parseConsoleSlugs, parseConsoleRows, consoleSlugToName } from "../src/domain/pricecharting-console";
-import { classifyPcCard } from "../src/domain/pricecharting-catalog";
+import { DEFAULT_MAX_IMAGE_FETCHES, refreshCatalog } from "../src/services/catalog-refresh";
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const CATEGORY = "https://www.pricecharting.com/category/one-piece-cards";
-
-async function fetchText(url: string): Promise<string> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-      if (res.ok) return await res.text();
-      if (res.status === 429) await sleep(3000);
-    } catch {
-      /* retry */
-    }
-    await sleep(1000);
-  }
-  return "";
-}
+/**
+ * Refresh the shared catalog from PriceCharting's Japanese category page.
+ *
+ * Every row goes through the same classifier and trackability rule the rest of the app uses, so
+ * rows land complete: the card number, the set/category derived from that number, the variant and an
+ * image that matches the variant (see src/services/catalog-refresh.ts). The same service backs the
+ * weekly `/api/cron/catalog` endpoint.
+ *
+ * Usage:
+ *   npm run job:catalog -- --min=11 [--max-sets=5] [--max-images=300] [--no-images]
+ *
+ * `--max-images=0` removes the per-run image cap: expect thousands of requests and a long run, which
+ * only makes sense as a one-off on your own machine. The cap exists so each run stays short — the
+ * cards it defers are picked up by the next run, because stored images are never re-fetched.
+ */
+const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`));
 
 async function main() {
-  const countOnly = process.argv.includes("--count");
-  const minArg = process.argv.find((a) => a.startsWith("--min="));
-  const minUsd = minArg ? parseFloat(minArg.split("=")[1]) : 11; // ~€10
-  const minCents = Math.round(minUsd * 100);
+  const minUsd = Number(arg("min")?.split("=")[1] ?? 11);
+  const maxSetsRaw = arg("max-sets")?.split("=")[1];
+  const maxImagesRaw = arg("max-images")?.split("=")[1];
+  const fetchImages = !process.argv.includes("--no-images");
+  const maxImageFetches = maxImagesRaw !== undefined ? Number(maxImagesRaw) : DEFAULT_MAX_IMAGE_FETCHES;
 
-  const slugs = parseConsoleSlugs(await fetchText(CATEGORY));
-  console.log(`Found ${slugs.length} Japanese sets. Keeping cards with raw ≥ $${minUsd}.${countOnly ? " (count only)" : ""}\n`);
+  console.log(
+    `Refreshing catalog: raw ≥ $${minUsd}` +
+      `${maxSetsRaw ? `, first ${maxSetsRaw} sets` : ""}` +
+      `${fetchImages ? `, max ${maxImageFetches || "unlimited"} images` : ", without images"} …`,
+  );
 
-  let scanned = 0;
-  let eligible = 0;
-  let imported = 0;
-  for (const slug of slugs) {
-    const rows = parseConsoleRows(await fetchText(`https://www.pricecharting.com/console/${slug}`));
-    scanned += rows.length;
-    const consoleName = consoleSlugToName(slug);
-    let setEligible = 0;
-    for (const row of rows) {
-      if (row.loosePriceCents < minCents) continue;
-      const card = classifyPcCard({ id: row.id, "console-name": consoleName, "product-name": row.name });
-      if (!card) continue; // DON etc.
-      eligible++;
-      setEligible++;
-      if (!countOnly) {
-        await db.card.upsert({
-          where: { externalId: card.externalId },
-          update: {
-            name: card.name, setCode: card.setCode, number: card.number,
-            rarity: card.rarity, variant: card.variant, category: card.category, providerIds: card.providerIds,
-          },
-          create: {
-            externalId: card.externalId, name: card.name, setCode: card.setCode, number: card.number,
-            rarity: card.rarity, variant: card.variant, category: card.category, language: card.language, providerIds: card.providerIds,
-          },
-        });
-        imported++;
-      }
-    }
-    console.log(`  ${slug}: ${rows.length} cards, ${setEligible} eligible`);
-    await sleep(1200);
+  const result = await refreshCatalog({
+    minPriceUsd: minUsd,
+    maxSets: maxSetsRaw ? Number(maxSetsRaw) : undefined,
+    fetchImages,
+    maxImageFetches,
+  });
+
+  console.log(
+    `Sets ${result.sets} · scanned ${result.scanned} · eligible ${result.eligible} · ` +
+      `new ${result.created} · updated ${result.updated} · images ${result.imagesStored}` +
+      `${result.imagesSkipped ? ` · images deferred ${result.imagesSkipped}` : ""}`,
+  );
+  if (result.imagesSkipped) {
+    console.log("Run again later to pick up the deferred images (already stored ones are kept).");
   }
-  console.log(`\nScanned ${scanned} cards across ${slugs.length} sets → ${eligible} with raw ≥ $${minUsd}.`);
-  if (!countOnly) console.log(`Imported/updated ${imported}.`);
+  if (result.errors.length) {
+    console.warn(`${result.errors.length} set(s) failed:`, result.errors.slice(0, 5));
+  }
 }
 
-main().finally(() => db.$disconnect());
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+  })
+  .finally(() => db.$disconnect());
