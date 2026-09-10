@@ -39,8 +39,8 @@ sign-up). A short recorded walkthrough is planned; drop the link here once it ex
 - **Card detail page** — 3-series price chart (Raw · PSA 9 · PSA 10), per-grade 30-day deltas,
   all-time high/low, "my holding" with purchase price → current value → P/L, and a watch toggle.
 - **Gallery / catalog browser** — shared catalog with card artwork, a landing page grouped by set
-  and category, rarity filter chips, text search (name / JP name / card number) and sorting by name
-  or price.
+  and category, rarity filter chips, text search over name and card number, and sorting by name or
+  price.
 - **Watchlist** — per-user list of cards to keep an eye on.
 - **Price alerts** — set a target price per watched card and grade. The price sync fires exactly
   once when the price crosses below the target (re-arming only after a recovery, so a card that
@@ -51,8 +51,8 @@ sign-up). A short recorded walkthrough is planned; drop the link here once it ex
   cost basis, and both the per-sale and total realized profit are shown on `/sales`.
 - **Automated price sync** — a scheduled job pulls raw / grade-9 / PSA-10 prices, converts them to
   EUR using ECB reference rates, and writes one idempotent snapshot per card, grade and day.
-- **Automatic catalog refresh** — a weekly job imports the new Japanese sets (with the artwork that
-  matches each variant) so fresh releases show up without any manual import.
+- **Automatic catalog refresh** — a weekly job imports the new Japanese sets with the artwork that
+  matches each variant, so fresh releases show up without any manual import.
 - **Self-hostable** — a full Docker Compose stack (Postgres + migrations + app + cron) runs the
   whole thing on a Raspberry Pi with no Node.js on the host.
 - **Accessibility & polish** — keyboard-friendly forms, labelled inputs, `prefers-reduced-motion`
@@ -64,11 +64,11 @@ sign-up). A short recorded walkthrough is planned; drop the link here once it ex
 | --- | --- |
 | Framework | Next.js 16 (App Router, React 19, TypeScript, `standalone` output) |
 | Styling | Tailwind CSS v4 with a custom "Vault" design-token theme |
-| Database | PostgreSQL via Prisma ORM (6 migrations in `prisma/migrations/`) |
+| Database | PostgreSQL via Prisma ORM (migrations in `prisma/migrations/`) |
 | Auth | Auth.js / NextAuth v5 (credentials provider, JWT sessions, bcrypt) |
 | Charts | Recharts |
 | Validation | Zod |
-| Tests | Vitest + Testing Library (121 unit tests, plus DB-backed integration tests) |
+| Tests | Vitest + Testing Library — pure-module unit tests plus DB-backed integration suites |
 | CI | GitHub Actions — lint, unit tests and a production build, plus an integration job on a Postgres 16 service |
 | Hosting | Vercel + Neon (cloud) **or** Docker Compose on a Raspberry Pi |
 
@@ -136,8 +136,8 @@ used — so historical values stay reproducible even when rates move.
 - **Per-user isolation by construction.** Role/session helpers gate access and every collection,
   watchlist, alert and sale query filters on `userId`; integration tests cover the isolation cases.
 - **No public surface.** Middleware (`src/proxy.ts`) keeps every page behind login except `/login`
-  and `/register`, and the scheduled endpoints require a bearer `CRON_SECRET` (an unset secret
-  authorises nothing).
+  and `/register`, and the scheduled endpoints run through one constant-time bearer check
+  (`src/lib/cron-auth.ts`) where an unset `CRON_SECRET` authorises nothing.
 
 ## Project structure
 
@@ -146,7 +146,7 @@ src/
   app/            # pages, server actions, API routes (/api/cron/*, /api/health, /api/card-image)
   components/     # AppShell, cards, charts + a small UI kit (ui/)
   domain/         # pure business logic, each module with a co-located *.test.ts
-  lib/            # db client, session helpers, providers/ (PriceCharting, eBay, ECB)
+  lib/            # db client, session helpers, cron auth, providers/ (PriceCharting, eBay, ECB)
   services/       # application use cases (dashboard, collection, price-sync, alerts, sales, catalog)
 prisma/           # schema.prisma + migrations
 scripts/          # seed + one-off import/normalization jobs (see SETUP.md)
@@ -171,7 +171,7 @@ Full walkthrough — environment variables, catalog imports, Docker/Pi stack and
 ## Tests
 
 ```bash
-npm test          # unit tests (121 tests, no database required)
+npm test          # unit tests, no database required
 npm run test:int  # integration tests against a migrated dev database (*.itest.ts)
 npm run lint      # eslint
 npm run build     # next build (also type-checks)
@@ -187,10 +187,10 @@ a throwaway Postgres 16 service with all migrations applied.
 Shipped: auth + invites, catalog, collection CRUD, dashboard, gallery, card detail, watchlist,
 target-price alerts with an optional webhook, sale tracking with realized P/L, scheduled price sync
 in EUR, automatic weekly catalog refresh, CI, Docker/Pi self-hosting. Still open (see
-[`docs/superpowers/PHASE2-backlog.md`](./docs/superpowers/PHASE2-backlog.md)): a "recent sales" list
-on card detail, Japanese names for cards (`nameJp` is never populated, so JP-name search finds
-nothing), profile/password page, owner sync-status view, CSV import/export and better coverage for
-rare Japanese cards.
+[`docs/superpowers/PHASE2-backlog.md`](./docs/superpowers/PHASE2-backlog.md)): Japanese card names
+(`nameJp` is in the model and the importer maps it, but no source feeds it yet — so search is
+name/number only), a "recent sales" list on card detail, profile/password page, owner sync-status
+view, CSV import/export and better coverage for rare Japanese cards.
 
 ## License
 
