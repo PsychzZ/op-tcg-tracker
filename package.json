@@ -22,7 +22,9 @@
     "resolve:owned": "tsx scripts/resolve-owned.ts",
     "normalize:catalog": "tsx scripts/normalize-catalog.ts",
     "prune:catalog": "tsx scripts/prune-catalog.ts",
-    "job:daily": "tsx scripts/run-daily.ts"
+    "job:daily": "tsx scripts/run-daily.ts",
+    "job:catalog": "tsx scripts/import-pricecharting-full.ts",
+    "fill:names": "tsx scripts/fill-japanese-names.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

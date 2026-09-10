@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/", label: "Dashboard" },
   { href: "/cards", label: "Karten" },
   { href: "/watchlist", label: "Watchlist" },
+  { href: "/sales", label: "Verkäufe" },
 ];
 
 export function MainNav({ isOwner }: { isOwner: boolean }) {

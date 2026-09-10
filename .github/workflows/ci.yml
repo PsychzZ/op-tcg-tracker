@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Lets you start the pipeline on any branch straight after pushing, without opening a PR.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Lint, unit tests and a production build. No database: the build only needs placeholder
+  # values (same approach as the Dockerfile), and `npm test` is DB-free by design.
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      # Build-time placeholders — CI never connects to a real database in this job.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+      AUTH_SECRET: ci-placeholder-not-a-real-secret
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # npm can skip lifecycle scripts, so the Prisma client is generated explicitly.
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  # The *itest.ts suites run against a real Postgres, so they get a service container and the
+  # committed migrations applied with `prisma migrate deploy`.
+  integration:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+      AUTH_SECRET: ci-placeholder-not-a-real-secret
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Apply migrations
+        run: npm run db:deploy
+
+      - name: Integration tests
+        run: npm run test:int
