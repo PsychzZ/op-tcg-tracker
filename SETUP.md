@@ -115,6 +115,7 @@ All scripts read `.env` via `dotenv` and run with `tsx`.
 | `npm run import:catalog` | Import a local card list into the shared catalog. Reads `data/cards.ja.json`, falling back to the bundled `data/cards.sample.json`. | `data/*.json` |
 | `npm run import:pc` | Import Japanese specials from PriceCharting for a hard-coded query list in `scripts/import-pricecharting.ts`. | `PRICECHARTING_TOKEN` |
 | `npm run job:catalog` (alias `import:pc:full`) | Refresh the catalog from PriceCharting's Japanese sets: `--min=11` (USD threshold) `--max-sets=5` `--max-images=300` `--no-images`. Slow (one page per set, ~1.2 s apart). Same code path as the weekly cron endpoint. | network |
+| `npm run fill:names` | Backfill the Japanese card names (`nameJp`) from the official card list on onepiece-cardgame.com, matched by card number: `--max-series=10` `--refill`. Stops early once every missing name is found. | network |
 | `npm run resolve:owned` | Resolve owned/watched cards that have no PriceCharting id and/or no image (mostly Western promos/collabs). Stores the product id, its console slug and the card image. | `PRICECHARTING_TOKEN` |
 | `npm run backfill:images` | Fetch missing card images from PriceCharting product pages. | network |
 | `npm run normalize:catalog` | One-off cleanup: recompute `setCode`/`category` from the card number and drop non-single/sealed rows. Owned or watched cards are never deleted. | database |
@@ -151,6 +152,12 @@ Image fetching is **capped per run** (`--max-images`, 300 by default): a full ca
 per variant/promo card, so each run stays short and the deferred images (`imagesSkipped`) are picked
 up by the next — already stored images are never re-fetched, so repeated runs converge. Use
 `--max-images=0` only for a patient one-off run, and `--no-images` to skip images entirely.
+
+**Japanese names** (`src/services/japanese-names.ts`) fills the one thing PriceCharting does not
+carry. `npm run fill:names` walks the official card list's series pages, matches each card by its
+number (`EB04-061`, `P-063`, …) and writes `nameJp`; a number that never shows up is reported as
+`missing` and left untouched — nothing is guessed. This is what makes the gallery's JP-name search
+work, and it is **not** part of the scheduled jobs: run it after a catalog refresh.
 
 **Scheduling**
 

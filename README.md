@@ -186,11 +186,12 @@ a throwaway Postgres 16 service with all migrations applied.
 
 Shipped: auth + invites, catalog, collection CRUD, dashboard, gallery, card detail, watchlist,
 target-price alerts with an optional webhook, sale tracking with realized P/L, scheduled price sync
-in EUR, automatic weekly catalog refresh, CI, Docker/Pi self-hosting. Still open (see
-[`docs/superpowers/PHASE2-backlog.md`](./docs/superpowers/PHASE2-backlog.md)): Japanese card names
-(`nameJp` is in the model and the importer maps it, but no source feeds it yet — so search is
-name/number only), a "recent sales" list on card detail, profile/password page, owner sync-status
-view, CSV import/export and better coverage for rare Japanese cards.
+in EUR, automatic weekly catalog refresh, Japanese names via `npm run fill:names`, CI, Docker/Pi
+self-hosting. Still open (see
+[`docs/superpowers/PHASE2-backlog.md`](./docs/superpowers/PHASE2-backlog.md)): a "recent sales" list
+on card detail, profile/password page, owner sync-status view, CSV import/export and better coverage
+for rare Japanese cards. Note the Japanese-name fill is a manual step (or your own cron) — it matches
+the official card list by card number and writes the name the gallery's search field matches.
 
 ## License
 

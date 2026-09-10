@@ -1,29 +1,15 @@
 import { extractPcImageUrl } from "@/domain/pricecharting-image";
+import { fetchText, sleep } from "./http";
 
 /**
  * Shared scraping helpers for PriceCharting's public pages, used by the price sync and the catalog
- * refresh. Deliberately tiny and dependency-free: the pages are plain HTML and the callers decide
- * what to do when one comes back empty.
+ * refresh. The generic request helpers live in ./http (the Japanese-name filler needs the same ones);
+ * they are re-exported here so callers keep importing everything PriceCharting-related from one place.
  */
+export { fetchText, sleep };
+
 export const PC_CATEGORY_URL = "https://www.pricecharting.com/category/one-piece-cards";
 export const PC_CONSOLE_URL = (slug: string) => `https://www.pricecharting.com/console/${slug}`;
-
-export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** GET a page with a few retries; returns "" when it stays unavailable (caller treats that as "no data"). */
-export async function fetchText(url: string): Promise<string> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-      if (res.ok) return await res.text();
-      if (res.status === 429) await sleep(3000);
-    } catch {
-      /* retry */
-    }
-    await sleep(1000);
-  }
-  return "";
-}
 
 /**
  * The per-variant product image for a PriceCharting product id. Each variant is its own product, so
