@@ -114,7 +114,7 @@ All scripts read `.env` via `dotenv` and run with `tsx`.
 | `npm run seed:owner` | Create/refresh the owner account from `OWNER_EMAIL` + `OWNER_PASSWORD`. | `OWNER_*` |
 | `npm run import:catalog` | Import a local card list into the shared catalog. Reads `data/cards.ja.json`, falling back to the bundled `data/cards.sample.json`. | `data/*.json` |
 | `npm run import:pc` | Import Japanese specials from PriceCharting for a hard-coded query list in `scripts/import-pricecharting.ts`. | `PRICECHARTING_TOKEN` |
-| `npm run job:catalog` (alias `import:pc:full`) | Refresh the catalog from PriceCharting's Japanese sets: `--min=11` (USD threshold) `--max-sets=5` `--no-images`. Slow (one page per set, ~1.2 s apart). Same code path as the weekly cron endpoint. | network |
+| `npm run job:catalog` (alias `import:pc:full`) | Refresh the catalog from PriceCharting's Japanese sets: `--min=11` (USD threshold) `--max-sets=5` `--max-images=300` `--no-images`. Slow (one page per set, ~1.2 s apart). Same code path as the weekly cron endpoint. | network |
 | `npm run resolve:owned` | Resolve owned/watched cards that have no PriceCharting id and/or no image (mostly Western promos/collabs). Stores the product id, its console slug and the card image. | `PRICECHARTING_TOKEN` |
 | `npm run backfill:images` | Fetch missing card images from PriceCharting product pages. | network |
 | `npm run normalize:catalog` | One-off cleanup: recompute `setCode`/`category` from the card number and drop non-single/sealed rows. Owned or watched cards are never deleted. | database |
@@ -144,8 +144,13 @@ price remains low and re-arms after a recovery.
    app uses (`classifyPcCard` + `isTrackable`), so the number decides set and category.
 3. Stores a per-variant PriceCharting image for alt-art / manga / parallel / serial cards and for
    promos — exactly the rows where the official per-number artwork would be wrong or unavailable.
-4. Reports `sets / scanned / eligible / created / updated / imagesStored / errors`, isolating a
-   failed set instead of aborting the run.
+4. Reports `sets / scanned / eligible / created / updated / imagesStored / imagesSkipped / errors`,
+   isolating a failed set instead of aborting the run.
+
+Image fetching is **capped per run** (`--max-images`, 300 by default): a full catalog needs one page
+per variant/promo card, so each run stays short and the deferred images (`imagesSkipped`) are picked
+up by the next — already stored images are never re-fetched, so repeated runs converge. Use
+`--max-images=0` only for a patient one-off run, and `--no-images` to skip images entirely.
 
 **Scheduling**
 
@@ -222,7 +227,7 @@ suites against a fresh Postgres 16 service.
 | `INVALID_INVITE` when registering a friend | Registering requires a usable invite code — create one as owner under `/settings/invites`. The owner e-mail itself can also register. |
 | Prices stay empty | The sync only fills grades it can find; make sure cards have a PriceCharting product id (import/resolve scripts) and run `npm run job:daily`. |
 | A card shows "kein Bild" or the base art | Base cards with a standard number use the official proxy URL; alt-art/manga/parallel/serial cards and promos need a stored provider image — run `npm run job:catalog` (or `backfill:images`) to fetch them. |
-| Catalog refresh takes minutes | It walks one page per set at ~1.2 s each. That is fine self-hosted; on Vercel check your plan's function timeout, otherwise run the refresh from the Pi (`npm run job:catalog`) and let Vercel serve only the app. |
+| Catalog refresh takes minutes, or defers images | It walks one page per set at ~1.2 s each and fetches at most `--max-images` pictures per run (300 by default), reporting the rest as `imagesSkipped`. That is fine self-hosted; on Vercel check your plan's function timeout, otherwise run the refresh from the Pi (`npm run job:catalog`) and let Vercel serve only the app. |
 | A target price never fires | Alerts are evaluated by the price sync, so the job has to run (`npm run job:daily` or the scheduler); the target must belong to the grade you want to watch, and the price has to reach it once. Already-reached targets fire on the next evaluation, then stay quiet until the price recovers. |
 | No webhook message | `ALERT_WEBHOOK_URL` is unset or the endpoint rejected the POST — alerts are still recorded and shown on the dashboard/watchlist. |
 | A sale changed nothing | Selling is refused when the holding is gone or smaller than the quantity you entered (a stale page); reload `/sales` and try again. A sale without a purchase price is recorded but deliberately excluded from the P/L. |

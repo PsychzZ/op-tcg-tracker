@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { db } from "../src/lib/db";
-import { refreshCatalog } from "../src/services/catalog-refresh";
+import { DEFAULT_MAX_IMAGE_FETCHES, refreshCatalog } from "../src/services/catalog-refresh";
 
 /**
  * Refresh the shared catalog from PriceCharting's Japanese category page.
@@ -10,31 +10,43 @@ import { refreshCatalog } from "../src/services/catalog-refresh";
  * image that matches the variant (see src/services/catalog-refresh.ts). The same service backs the
  * weekly `/api/cron/catalog` endpoint.
  *
- * Usage: `npm run job:catalog -- --min=11 [--max-sets=5] [--no-images]`
+ * Usage:
+ *   npm run job:catalog -- --min=11 [--max-sets=5] [--max-images=300] [--no-images]
+ *
+ * `--max-images=0` removes the per-run image cap: expect thousands of requests and a long run, which
+ * only makes sense as a one-off on your own machine. The cap exists so each run stays short — the
+ * cards it defers are picked up by the next run, because stored images are never re-fetched.
  */
 const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`));
 
 async function main() {
   const minUsd = Number(arg("min")?.split("=")[1] ?? 11);
   const maxSetsRaw = arg("max-sets")?.split("=")[1];
+  const maxImagesRaw = arg("max-images")?.split("=")[1];
   const fetchImages = !process.argv.includes("--no-images");
+  const maxImageFetches = maxImagesRaw !== undefined ? Number(maxImagesRaw) : DEFAULT_MAX_IMAGE_FETCHES;
 
   console.log(
     `Refreshing catalog: raw ≥ $${minUsd}` +
       `${maxSetsRaw ? `, first ${maxSetsRaw} sets` : ""}` +
-      `${fetchImages ? "" : ", without images"} …`,
+      `${fetchImages ? `, max ${maxImageFetches || "unlimited"} images` : ", without images"} …`,
   );
 
   const result = await refreshCatalog({
     minPriceUsd: minUsd,
     maxSets: maxSetsRaw ? Number(maxSetsRaw) : undefined,
     fetchImages,
+    maxImageFetches,
   });
 
   console.log(
     `Sets ${result.sets} · scanned ${result.scanned} · eligible ${result.eligible} · ` +
-      `new ${result.created} · updated ${result.updated} · images ${result.imagesStored}`,
+      `new ${result.created} · updated ${result.updated} · images ${result.imagesStored}` +
+      `${result.imagesSkipped ? ` · images deferred ${result.imagesSkipped}` : ""}`,
   );
+  if (result.imagesSkipped) {
+    console.log("Run again later to pick up the deferred images (already stored ones are kept).");
+  }
   if (result.errors.length) {
     console.warn(`${result.errors.length} set(s) failed:`, result.errors.slice(0, 5));
   }

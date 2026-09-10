@@ -11,6 +11,9 @@ import {
   sleep,
 } from "@/lib/providers/pricecharting-scrape";
 
+/** How many images one run fetches by default before deferring the rest to the next run. */
+export const DEFAULT_MAX_IMAGE_FETCHES = 300;
+
 export interface CatalogRefreshOptions {
   /** Only cards whose raw price is at least this many USD are imported (0 = no price filter). */
   minPriceUsd?: number;
@@ -20,6 +23,12 @@ export interface CatalogRefreshOptions {
   respectTrackability?: boolean;
   /** Store the per-variant provider image for cards whose official art cannot be used. */
   fetchImages?: boolean;
+  /**
+   * Upper bound on image fetches per run. A full catalog needs a page per variant/promo card —
+   * thousands of requests — so one run stays short and polite and the remainder is picked up by the
+   * next run, since every stored image is kept. Set to 0 for no limit.
+   */
+  maxImageFetches?: number;
   /** Injectable for tests: (priceCharting product id) → image URL or null. */
   imageFetcher?: (pcProductId: string) => Promise<string | null>;
   /** Delay between set pages (PriceCharting rate-limits). */
@@ -33,6 +42,8 @@ export interface CatalogRefreshResult {
   created: number;
   updated: number;
   imagesStored: number;
+  /** Cards that still need a provider image but were deferred to a later run by the cap. */
+  imagesSkipped: number;
   errors: string[];
 }
 
@@ -78,7 +89,9 @@ export async function upsertCatalogCard(
  * *right* art: the official per-number art is kept when it applies, and a per-variant provider image
  * is stored for alt-art/manga/parallel/serial and for promos, where the official URL cannot help.
  *
- * Runs weekly from `/api/cron/catalog` and manually via `npm run import:pc:full`.
+ * Runs weekly from `/api/cron/catalog` and manually via `npm run job:catalog`. Image fetching is
+ * capped per run (`maxImageFetches`) so a full refresh converges over a few runs instead of
+ * hammering the site for thousands of pages in one go.
  */
 export async function refreshCatalog(options: CatalogRefreshOptions = {}): Promise<CatalogRefreshResult> {
   const {
@@ -86,11 +99,13 @@ export async function refreshCatalog(options: CatalogRefreshOptions = {}): Promi
     maxSets,
     respectTrackability = true,
     fetchImages = true,
+    maxImageFetches = DEFAULT_MAX_IMAGE_FETCHES,
     imageFetcher = fetchProductImageUrl,
     delayMs = 1200,
   } = options;
 
   const minCents = Math.round(minPriceUsd * 100);
+  let imageFetches = 0;
   const result: CatalogRefreshResult = {
     sets: 0,
     scanned: 0,
@@ -98,6 +113,7 @@ export async function refreshCatalog(options: CatalogRefreshOptions = {}): Promi
     created: 0,
     updated: 0,
     imagesStored: 0,
+    imagesSkipped: 0,
     errors: [],
   };
 
@@ -131,7 +147,13 @@ export async function refreshCatalog(options: CatalogRefreshOptions = {}): Promi
 
         let imageUrl: string | null = null;
         if (fetchImages && needsProviderImage(card.number, card.variant) && !existing?.imageUrl) {
-          imageUrl = await imageFetcher(card.providerIds.priceCharting);
+          const underCap = maxImageFetches === 0 || imageFetches < maxImageFetches;
+          if (underCap) {
+            imageFetches++;
+            imageUrl = await imageFetcher(card.providerIds.priceCharting);
+          } else {
+            result.imagesSkipped++;
+          }
         }
 
         const outcome = await upsertCatalogCard(card, imageUrl);
