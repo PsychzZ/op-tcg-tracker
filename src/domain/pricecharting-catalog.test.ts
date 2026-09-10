@@ -90,3 +90,32 @@ describe("toPcCatalogCard", () => {
     expect(toPcCatalogCard(make("10619168", "One Piece Japanese Premium Booster 2", "DON!! Card [Luffy Gear 5 Gold]"))).toBeNull();
   });
 });
+
+describe("variant detection", () => {
+  const make = (id: string, productName: string): PcSearchProduct => ({
+    id,
+    "console-name": "One Piece Japanese Carrying on His Will",
+    "product-name": productName,
+  });
+
+  it("reads variant markers spelled out in the name, not just bracket tags", () => {
+    expect(classifyPcCard(make("1", "Monkey D. Luffy (Alternate Art) OP01-003"))?.variant).toBe("altArt");
+    expect(classifyPcCard(make("2", "Trafalgar Law Manga OP01-002"))?.variant).toBe("mangaArt");
+    expect(classifyPcCard(make("3", "Nami [Parallel] OP01-016"))?.variant).toBe("parallel");
+    expect(classifyPcCard(make("4", "Shanks Serial Numbered OP01-004"))?.variant).toBe("serial");
+    expect(classifyPcCard(make("5", "Roronoa Zoro OP01-025"))?.variant).toBe("normal");
+  });
+
+  it("still honours bracket tags", () => {
+    expect(classifyPcCard(make("6", "Ace & Sabo & Luffy [Alternate Art] OP13-007"))?.variant).toBe("altArt");
+    expect(classifyPcCard(make("7", "Luffy-Tarou [SP] ST18-005"))?.variant).toBe("normal");
+  });
+
+  it("keeps the number and the set/category derived from it", () => {
+    const c = classifyPcCard(make("8", "Monkey D. Luffy (Alternate Art) OP01-003"));
+    expect(c?.number).toBe("OP01-003");
+    expect(c?.setCode).toBe("OP01");
+    expect(c?.category).toBe("booster");
+    expect(c?.rarity).toBe("SR"); // no explicit tag → inferred, not invented per variant
+  });
+});
